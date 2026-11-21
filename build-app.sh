@@ -11,11 +11,13 @@ if [ ! -f "$ADAPTER/lib/media-control/mediaremote-adapter.pl" ]; then
   exit 1
 fi
 
-swift build -c release
+swift build -c release -Xswiftc -file-prefix-map -Xswiftc "$PWD=."
 APP="build/拼音 Sing.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/MediaRemote"
 cp .build/release/PinyinSing "$APP/Contents/MacOS/PinyinSing"
+# Drop debug info: it only helps debugging, and it records the folder the app was built in.
+strip -S -x "$APP/Contents/MacOS/PinyinSing"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/Vendor/pinyin-pro.js "$APP/Contents/Resources/"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/"

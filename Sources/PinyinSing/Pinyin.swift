@@ -109,10 +109,15 @@ final class PinyinEngine {
 
     private static func scriptURL() -> URL? {
         if let u = Bundle.main.url(forResource: "pinyin-pro", withExtension: "js") { return u }
-        // While developing with `swift run`
+        #if DEBUG
+        // Debug builds run outside the app bundle (`swift run`, `--test`): use the repo's copy.
+        // Release builds leave this out, so no local file path ends up in the app.
         let dev = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Resources/Vendor/pinyin-pro.js")
         return FileManager.default.fileExists(atPath: dev.path) ? dev : nil
+        #else
+        return nil
+        #endif
     }
 }

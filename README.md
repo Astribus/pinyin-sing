@@ -27,7 +27,7 @@ Lyrics are fetched for the song you're playing and saved only on your Mac. This 
 
 ## Download
 
-Get `拼音.Sing.zip` from the [latest release](https://github.com/Astribus/pinyin-sing/releases/latest), unzip it, and drag 拼音 Sing into Applications.
+Download the `PinyinSing` zip from the [latest release](https://github.com/Astribus/pinyin-sing/releases/latest), unzip it, and drag 拼音 Sing into Applications.
 
 The app isn't signed by a paid Apple developer account, so the first time you open it, macOS says it can't check it. Click Done, then open System Settings → Privacy & Security, scroll down, and click Open Anyway next to 拼音 Sing. You only have to do this once.
 
