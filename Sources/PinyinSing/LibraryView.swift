@@ -317,6 +317,10 @@ struct HomePage: View {
                         .padding(.vertical, 4)
                 }
 
+                if nowPlaying.track != nil {
+                    SeekBar(nowPlaying: nowPlaying, tint: settings.primary, onDark: false)
+                        .padding(.vertical, 2)
+                }
                 if heroWidth >= 860 {
                     HStack(spacing: 12) { transport; heroButtons }
                 } else {
@@ -799,6 +803,9 @@ struct NowPlayingPage: View {
         GeometryReader { g in
             VStack(alignment: .leading, spacing: 22) {
                 header.fixedSize(horizontal: false, vertical: true)
+                if nowPlaying.track != nil {
+                    SeekBar(nowPlaying: nowPlaying, tint: settings.primary, onDark: false)
+                }
                 if let err = nowPlaying.adapterError {
                     Text(err).foregroundStyle(.red)
                 }

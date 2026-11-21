@@ -104,6 +104,11 @@ struct OverlayView: View {
                     }
                 }
                 Spacer()
+                Bubble(shown: hovering, order: 0) {
+                    SeekBar(nowPlaying: model.nowPlaying, tint: settings.highlight)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 2)
+                }
                 PlayerControls(model: model, nowPlaying: model.nowPlaying, settings: settings, shown: hovering)
             }
             .padding(10)
@@ -495,4 +500,65 @@ struct SplitGrabber: NSViewRepresentable {
         return v
     }
     func updateNSView(_ v: GrabView, context: Context) { v.onHover = onHover; v.onDrag = onDrag }
+}
+
+/// Timeline of the song: time played on the left, song length on the right, and a bar you can
+/// click or drag to jump anywhere. While dragging, the time shows where you'll land.
+struct SeekBar: View {
+    @ObservedObject var nowPlaying: NowPlayingMonitor
+    var tint: Color
+    /// Light text and track for the dark island; the dashboard uses the system colors.
+    var onDark = true
+    @Local private var dragging: Double?   // 0...1 while dragging
+    @Local private var over = false
+
+    var body: some View {
+        let duration = nowPlaying.track?.duration ?? 0
+        TimelineView(.periodic(from: .now, by: 0.25)) { ctx in
+            let played = min(duration, max(0, nowPlaying.position(at: ctx.date)))
+            let fraction = dragging ?? (duration > 0 ? played / duration : 0)
+            HStack(spacing: 10) {
+                time(dragging.map { $0 * duration } ?? played)
+                GeometryReader { g in
+                    let w = g.size.width
+                    let h: CGFloat = over || dragging != nil ? 6 : 4
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(onDark ? Color.white.opacity(0.2) : Color.primary.opacity(0.12))
+                            .frame(height: h)
+                        Capsule().fill(tint)
+                            .frame(width: max(h, w * fraction), height: h)
+                        Circle().fill(.white)
+                            .frame(width: 13, height: 13)
+                            .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+                            .offset(x: w * fraction - 6.5)
+                            .opacity(over || dragging != nil ? 1 : 0)
+                    }
+                    .frame(height: g.size.height)
+                    .contentShape(Rectangle())
+                    .gesture(DragGesture(minimumDistance: 0)
+                        .onChanged { d in dragging = min(1, max(0, d.location.x / max(w, 1))) }
+                        .onEnded { d in
+                            let f = min(1, max(0, d.location.x / max(w, 1)))
+                            nowPlaying.seek(to: f * duration)
+                            dragging = nil
+                        })
+                }
+                .frame(height: 16)
+                time(duration)
+            }
+            .animation(.easeOut(duration: 0.15), value: over)
+        }
+        .opacity(duration > 0 ? 1 : 0.4)
+        .allowsHitTesting(duration > 0)
+        .onHover { over = $0 }
+        .help(duration > 0 ? "Drag to jump anywhere in the song" : "This player doesn't report the song's length")
+    }
+
+    private func time(_ t: Double) -> some View {
+        let s = Int(t.rounded(.down))
+        return Text(String(format: "%d:%02d", s / 60, s % 60))
+            .font(.system(size: 11, weight: .medium).monospacedDigit())
+            .foregroundStyle(onDark ? Color.white.opacity(0.75) : Color.secondary)
+            .frame(width: 36)
+    }
 }
