@@ -265,16 +265,19 @@ private struct SidebarRowStyle: ButtonStyle {
     }
 }
 
-/// A frosted rounded panel used for cards across the dashboard.
+/// A rounded panel used for cards across the dashboard. A lightly see-through fill instead of a
+/// live blur: the background behind it is already soft, and dozens of live blurs made scrolling
+/// stutter.
 struct GlassCard: ViewModifier {
     var radius: CGFloat = 22
+    @Environment(\.colorScheme) private var scheme
     func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         content
-            .background(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(.ultraThinMaterial))
-            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .strokeBorder(LinearGradient(colors: [.white.opacity(0.18), .white.opacity(0.04)],
-                                             startPoint: .top, endPoint: .bottom)))
-            .shadow(color: .black.opacity(0.18), radius: 18, y: 10)
+            .background(shape.fill(scheme == .dark ? Color(white: 0.12).opacity(0.62) : Color.white.opacity(0.62)))
+            .overlay(shape.strokeBorder(LinearGradient(colors: [.white.opacity(scheme == .dark ? 0.14 : 0.5), .white.opacity(0.03)],
+                                                       startPoint: .top, endPoint: .bottom)))
+            .shadow(color: .black.opacity(0.1), radius: 6, y: 3)
     }
 }
 

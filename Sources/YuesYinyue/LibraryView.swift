@@ -240,7 +240,7 @@ struct HomePage: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 34) {
+            LazyVStack(alignment: .leading, spacing: 34) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day()).uppercased())
                         .font(.system(size: 11, weight: .bold)).tracking(1.4).foregroundStyle(.secondary)
@@ -508,7 +508,7 @@ struct Shelf: View {
                     Text(empty).foregroundStyle(.secondary)
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(alignment: .top, spacing: 20) {
+                        LazyHStack(alignment: .top, spacing: 20) {
                             ForEach(songs) { s in
                                 SongCard(song: s, image: library.artwork(for: s.id), tint: settings.highlight,
                                          model: model, library: library, ui: ui)
@@ -701,7 +701,7 @@ struct SongCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Cover(image: image, title: song.title, tint: tint)
-                .shadow(color: .black.opacity(over ? 0.35 : 0.18), radius: over ? 14 : 6, y: over ? 8 : 3)
+                .shadow(color: .black.opacity(over ? 0.28 : 0.14), radius: over ? 10 : 4, y: over ? 6 : 2)
                 .overlay(alignment: .bottomLeading) {
                     if over {
                         Button { model.play(song) } label: {
@@ -1570,90 +1570,45 @@ struct SettingsView: View {
     }
 }
 
-/// Lets people send an idea or a bug report: their email (optional, for a reply) and a message.
+/// Where to send ideas and bug reports: a message on LinkedIn, or an issue on GitHub.
 struct FeedbackForm: View {
     @ObservedObject var model: AppModel
     @ObservedObject var settings: AppSettings
-    @Local private var email = ""
-    @Local private var message = ""
-    @Local private var sending = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Found a bug or have an idea? It goes straight to the developer.")
-                .font(.system(size: 13)).foregroundStyle(.secondary)
-            ThemedField(placeholder: "Your email (optional, only if you want a reply)", text: $email, settings: settings)
-            ZStack(alignment: .topLeading) {
-                if message.isEmpty {
-                    Text("What should be better?").foregroundStyle(.tertiary)
-                        .padding(.horizontal, 14).padding(.vertical, 11)
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 14) {
+                Image(systemName: "bubble.left.and.text.bubble.right.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 46, height: 46)
+                    .background(Circle().fill(LinearGradient(colors: [settings.primary, settings.secondary],
+                                                             startPoint: .topLeading, endPoint: .bottomTrailing)))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Have an idea or found a bug?").font(.system(size: 15, weight: .semibold))
+                    Text("Message the developer on LinkedIn, or report it on GitHub so others can see it too.")
+                        .font(.system(size: 13)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                TextEditor(text: $message)
-                    .font(.system(size: 14))
-                    .scrollContentBackground(.hidden)
-                    .padding(.horizontal, 9).padding(.vertical, 6)
             }
-            .frame(minHeight: 120)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.primary.opacity(0.06)))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(.primary.opacity(0.1)))
-            HStack {
-                if !Feedback.isConfigured {
-                    Text("Sending isn't set up yet.").font(.caption).foregroundStyle(.tertiary)
+            HStack(spacing: 10) {
+                if let url = FeedbackLinks.linkedIn {
+                    DialogButton("Message on LinkedIn", settings: settings, style: .primary, symbol: "person.crop.circle.fill") {
+                        NSWorkspace.shared.open(url)
+                    }
                 }
-                Spacer()
-                DialogButton(sending ? "Sending…" : "Send feedback", settings: settings, style: .primary,
-                             symbol: "paperplane.fill",
-                             disabled: sending || !Feedback.isConfigured || !canSend, action: send)
-                    .frame(width: 190)
+                DialogButton("Report on GitHub", settings: settings, style: .tinted, symbol: "ladybug.fill") {
+                    NSWorkspace.shared.open(FeedbackLinks.githubIssues)
+                }
             }
         }
         .padding(18)
         .glassCard(18)
     }
-
-    private var canSend: Bool {
-        let e = email.trimmingCharacters(in: .whitespaces)
-        let okEmail = e.isEmpty || e.range(of: #"^[^@\s]+@[^@\s]+\.[^@\s]+$"#, options: .regularExpression) != nil
-        return okEmail && message.trimmingCharacters(in: .whitespacesAndNewlines).count >= 3
-    }
-
-    private func send() {
-        sending = true
-        Task {
-            let ok = await Feedback.send(email: email, message: message)
-            sending = false
-            if ok {
-                message = ""
-                model.notify("Thanks for the feedback", detail: "It was sent.")
-            } else {
-                model.notify("Couldn't send", detail: "Check your internet connection and try again.")
-            }
-        }
-    }
 }
 
-/// Where feedback goes: a form endpoint that forwards messages by email, so no address is
-/// written in the app. Empty until it's set up.
-enum Feedback {
-    static let endpoint = ""
-    static var isConfigured: Bool { !endpoint.isEmpty }
-
-    static func send(email: String, message: String) async -> Bool {
-        guard let url = URL(string: endpoint) else { return false }
-        var r = URLRequest(url: url, timeoutInterval: 15)
-        r.httpMethod = "POST"
-        r.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        r.setValue("application/json", forHTTPHeaderField: "Accept")
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
-        let body: [String: String] = [
-            "email": email.trimmingCharacters(in: .whitespaces),
-            "message": message,
-            "app_version": version,
-            "macos": ProcessInfo.processInfo.operatingSystemVersionString,
-        ]
-        r.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        guard let (_, resp) = try? await URLSession.shared.data(for: r),
-              let code = (resp as? HTTPURLResponse)?.statusCode else { return false }
-        return (200..<300).contains(code)
-    }
+enum FeedbackLinks {
+    /// The developer's LinkedIn profile.
+    static let linkedIn = URL(string: "https://www.linkedin.com/in/yue-chen-0aa274317/")
+    static let githubIssues = URL(string: "https://github.com/Astribus/yues-yinyue/issues/new")!
 }
