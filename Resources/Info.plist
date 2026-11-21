@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key><string>Yue's 音乐</string>
+    <key>CFBundleDisplayName</key><string>Yue's 音乐</string>
+    <key>CFBundleIdentifier</key><string>io.github.astribus.yuesyinyue</string>
+    <key>CFBundleExecutable</key><string>YuesYinyue</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleShortVersionString</key><string>0.1.0</string>
+    <key>CFBundleVersion</key><string>1</string>
+    <key>LSMinimumSystemVersion</key><string>14.4</string>
+    <key>NSSpeechRecognitionUsageDescription</key><string>To write down the lyrics of songs that have none, the app listens to the music app and turns the singing into text, on your Mac.</string>
+    <key>NSAppleEventsUsageDescription</key><string>To change the speed of YouTube videos playing in Chrome.</string>
+    <key>NSAudioCaptureUsageDescription</key><string>To hear the song that is playing so it can write down or time its lyrics. Only the music app is captured, never your microphone.</string>
+    <key>NSHighResolutionCapable</key><true/>
+    <key>NSPrincipalClass</key><string>NSApplication</string>
+</dict>
+</plist>
