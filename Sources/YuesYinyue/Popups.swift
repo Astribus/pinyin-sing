@@ -62,7 +62,7 @@ struct PopupHost: View {
                         .id(p.kind)
                 }
                 if let modal = activeModal {
-                    Color.black.opacity(0.28)
+                    Color.black.opacity(0.45)
                         .ignoresSafeArea()
                         .onTapGesture { dismissModal() }
                         .transition(.opacity)
@@ -146,12 +146,11 @@ struct PopupHost: View {
 
     private var activeModal: AnyView? {
         if let req = ui.namingAlbum {
-            return AnyView(TextDialog(settings: settings, icon: "plus.square.on.square", title: "New album",
-                                      placeholder: "Album name", initial: "", action: "Create",
-                                      note: req.songID == nil ? nil : "The song is added to it right away.") { name in
+            let song = req.songID.flatMap { id in library.songs.first { $0.id == id } }
+            return AnyView(NewAlbumDialog(settings: settings, library: library, song: song) { name in
                 let a = library.newAlbum(name, with: req.songID)
                 if req.songID == nil { ui.page = .album(a.id) }
-                model.notify("Album created", detail: name)
+                model.notify("Album created", detail: song.map { "\(name) · added \($0.title)" } ?? name)
                 dismissModal()
             } cancel: { dismissModal() })
         }
@@ -402,6 +401,8 @@ struct ThemedDialog<Buttons: View>: View {
         }
         .padding(26)
         .frame(width: 360)
+        .background(RoundedRectangle(cornerRadius: 22, style: .continuous)
+            .fill(Color(nsColor: .windowBackgroundColor).opacity(0.75)))
         .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.regularMaterial))
         .background(RoundedRectangle(cornerRadius: 22, style: .continuous)
             .fill(LinearGradient(colors: [settings.primary.opacity(0.16), settings.secondary.opacity(0.08)],
@@ -440,7 +441,6 @@ struct DialogButton: View {
             .background(Capsule().fill(bg))
             .overlay(Capsule().strokeBorder(style == .plain ? Color.primary.opacity(0.12) : .clear))
             .scaleEffect(over && !disabled ? 1.02 : 1)
-            .opacity(disabled ? 0.45 : 1)
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -449,6 +449,7 @@ struct DialogButton: View {
     }
 
     private var fg: Color {
+        if disabled { return .secondary }
         switch style {
         case .primary, .destructive: return .white
         case .plain: return .primary
@@ -456,6 +457,7 @@ struct DialogButton: View {
         }
     }
     private var bg: Color {
+        if disabled { return Color.primary.opacity(0.08) }
         switch style {
         case .primary: return settings.primary.opacity(over ? 1 : 0.9)
         case .destructive: return Color.red.opacity(over ? 0.95 : 0.85)
@@ -542,4 +544,93 @@ struct EditDialog: View {
         model.update(song)
         close()
     }
+}
+
+/// "New album": a live cover preview that updates as you type, the name field, and (when it was
+/// opened from a song) that song's cover and title so it's clear what's being added.
+struct NewAlbumDialog: View {
+    @ObservedObject var settings: AppSettings
+    @ObservedObject var library: LyricsLibrary
+    var song: SavedSong?
+    var done: (String) -> Void
+    var cancel: () -> Void
+    @Local private var name = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            HStack(alignment: .center, spacing: 18) {
+                // Cover preview: the first letter of the name on the theme's gradient.
+                ZStack {
+                    LinearGradient(colors: [settings.primary, settings.secondary],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing)
+                    if let first = trimmed.first {
+                        Text(String(first))
+                            .font(.system(size: 46, weight: .heavy, design: .rounded))
+                            .foregroundStyle(.white)
+                            .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
+                            .transition(.scale(scale: 0.6).combined(with: .opacity))
+                            .id(first)
+                    } else {
+                        Image(systemName: "square.stack.fill")
+                            .font(.system(size: 34, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.9))
+                    }
+                }
+                .frame(width: 104, height: 104)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.white.opacity(0.2)))
+                .shadow(color: .black.opacity(0.3), radius: 14, y: 8)
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: trimmed.first)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("NEW ALBUM").font(.system(size: 11, weight: .bold)).tracking(1.3)
+                        .foregroundStyle(settings.primary)
+                    Text(trimmed.isEmpty ? "Untitled" : trimmed)
+                        .font(.system(size: 24, weight: .heavy, design: .rounded))
+                        .foregroundStyle(trimmed.isEmpty ? Color.secondary : Color.primary)
+                        .lineLimit(2)
+                        .animation(nil, value: trimmed)
+                    Text(song == nil ? "Empty for now" : "1 song")
+                        .font(.system(size: 13)).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+
+            ThemedField(placeholder: "Album name", text: $name, settings: settings, onSubmit: save)
+
+            if let song {
+                HStack(spacing: 12) {
+                    Cover(image: library.artwork(for: song.id), title: song.title, tint: settings.primary, corner: 8)
+                        .frame(width: 40, height: 40)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Adding").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+                        Text(song.title).font(.system(size: 13, weight: .semibold)).lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(settings.primary)
+                }
+                .padding(10)
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(settings.primary.opacity(0.12)))
+            }
+
+            HStack(spacing: 10) {
+                DialogButton("Cancel", settings: settings, style: .plain, action: cancel)
+                DialogButton("Create album", settings: settings, style: .primary, symbol: "plus",
+                             disabled: trimmed.isEmpty, action: save)
+            }
+        }
+        .padding(26)
+        .frame(width: 420)
+        .background(RoundedRectangle(cornerRadius: 26, style: .continuous)
+            .fill(Color(nsColor: .windowBackgroundColor).opacity(0.8)))
+        .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(.regularMaterial))
+        .background(RoundedRectangle(cornerRadius: 26, style: .continuous)
+            .fill(LinearGradient(colors: [settings.primary.opacity(0.22), settings.secondary.opacity(0.1)],
+                                 startPoint: .topLeading, endPoint: .bottomTrailing)))
+        .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(settings.primary.opacity(0.35), lineWidth: 1.2))
+        .shadow(color: .black.opacity(0.4), radius: 40, y: 20)
+    }
+
+    private var trimmed: String { name.trimmingCharacters(in: .whitespaces) }
+    private func save() { if !trimmed.isEmpty { done(trimmed) } }
 }

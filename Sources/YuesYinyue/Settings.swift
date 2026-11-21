@@ -11,6 +11,12 @@ enum LineFill: String, CaseIterable, Identifiable {
         case .sweep: return "Sweep across the line (estimated)"
         }
     }
+    var short: String {
+        switch self {
+        case .wholeLine: return "Whole line"
+        case .sweep: return "Sweep"
+        }
+    }
 }
 
 enum AppearanceMode: String, CaseIterable, Identifiable {
@@ -19,50 +25,43 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
     var label: String { rawValue.capitalized }
 }
 
-/// How the theme colors are used on the dashboard background.
-enum ThemeStyle: String, CaseIterable, Identifiable {
-    case albumArt   // blurred album art of what's playing (falls back to the theme colors)
-    case aurora     // soft blobs of the two colors
-    case gradient   // diagonal fade from primary to secondary
-    case solid      // a light wash of the primary color
-    case minimal    // plain window color, theme color only on accents
-    var id: String { rawValue }
-    var label: String {
-        switch self {
-        case .albumArt: return "Album art"
-        case .aurora: return "Aurora"
-        case .gradient: return "Gradient"
-        case .solid: return "Solid"
-        case .minimal: return "Minimal"
-        }
-    }
-}
-
-/// Ready-made themes. Picking one sets the style and both colors; any of them can be changed after.
-struct ThemePreset: Identifiable {
+/// A curated look: dashboard colors, the color sung words turn, and the island's color.
+/// Users pick from these instead of mixing their own, so it always looks good.
+struct Theme: Identifiable, Equatable {
+    var id: String
     var name: String
-    var style: ThemeStyle
     var primary: String
-    var secondary: String?
-    var id: String { name }
+    var secondary: String
+    var highlight: String     // sung words
+    var island: String        // island background
+    /// Takes its colors from the album art of what's playing.
+    var followsArt = false
 
-    static let all: [ThemePreset] = [
-        .init(name: "Album Art", style: .albumArt, primary: "#7FD4FF", secondary: nil),
-        .init(name: "Ocean", style: .aurora, primary: "#2E7BFF", secondary: "#1ED6C1"),
-        .init(name: "Sakura", style: .aurora, primary: "#FF7EB3", secondary: "#FFC6A8"),
-        .init(name: "Matcha", style: .gradient, primary: "#7DBB6A", secondary: "#E3D9A6"),
-        .init(name: "Sunset", style: .gradient, primary: "#FF7A45", secondary: "#B14BFF"),
-        .init(name: "Lavender", style: .solid, primary: "#9C8CFF", secondary: nil),
-        .init(name: "Midnight", style: .aurora, primary: "#3B3F9E", secondary: "#0E1630"),
-        .init(name: "Mono", style: .minimal, primary: "#8E8E93", secondary: nil),
+    static let all: [Theme] = [
+        Theme(id: "album", name: "Album", primary: "#7FD4FF", secondary: "#9B8CFF", highlight: "#7FD4FF",
+              island: "#14161C", followsArt: true),
+        Theme(id: "midnight", name: "Midnight", primary: "#7C8CFF", secondary: "#3A2F8F", highlight: "#A9B6FF", island: "#11131C"),
+        Theme(id: "sakura", name: "Sakura", primary: "#FF8FB1", secondary: "#FFB59A", highlight: "#FFA3C2", island: "#1C1317"),
+        Theme(id: "ocean", name: "Ocean", primary: "#2FB4FF", secondary: "#1ED6C1", highlight: "#7FE3FF", island: "#0D1820"),
+        Theme(id: "ember", name: "Ember", primary: "#FF7A45", secondary: "#E83E6C", highlight: "#FFB48A", island: "#1B120F"),
+        Theme(id: "matcha", name: "Matcha", primary: "#8FD07C", secondary: "#D9CF8F", highlight: "#B9F2A3", island: "#111811"),
+        Theme(id: "lavender", name: "Lavender", primary: "#B79CFF", secondary: "#7AA2FF", highlight: "#CDB8FF", island: "#15121D"),
+        Theme(id: "sunset", name: "Sunset", primary: "#FF9A5A", secondary: "#B45CFF", highlight: "#FFC08A", island: "#1B1219"),
+        Theme(id: "forest", name: "Forest", primary: "#4FBF8B", secondary: "#2E6B5A", highlight: "#8FE3B9", island: "#0F1714"),
+        Theme(id: "coral", name: "Coral", primary: "#FF7F7F", secondary: "#FFB36B", highlight: "#FFA8A0", island: "#1C1312"),
+        Theme(id: "lagoon", name: "Lagoon", primary: "#3FD0D4", secondary: "#3B6FE0", highlight: "#8DEFF0", island: "#0C1619"),
+        Theme(id: "plum", name: "Plum", primary: "#D46FB4", secondary: "#6B3FA0", highlight: "#F0A6D6", island: "#1A1018"),
+        Theme(id: "gold", name: "Gold", primary: "#E6B94F", secondary: "#9C6B2E", highlight: "#F7D98A", island: "#18140D"),
+        Theme(id: "arctic", name: "Arctic", primary: "#9FD8FF", secondary: "#E6F2FF", highlight: "#CFEFFF", island: "#101820"),
+        Theme(id: "cherry", name: "Cherry", primary: "#E5484D", secondary: "#8C1D2F", highlight: "#FF8A8F", island: "#1A0F11"),
+        Theme(id: "mono", name: "Mono", primary: "#C9C9D1", secondary: "#6E6E7A", highlight: "#F5D76E", island: "#141416"),
     ]
+    static func named(_ id: String) -> Theme { all.first { $0.id == id } ?? all[0] }
 }
 
 /// All user settings, saved automatically in UserDefaults.
 @MainActor
 final class AppSettings: ObservableObject {
-    @AppStorage("highlightHex") var highlightHex = "#7FD4FF"
-    @AppStorage("backgroundHex") var backgroundHex = "#16181D"
     /// 0 = solid color, 1 = full glass
     @AppStorage("glass") var glass = 0.6
     @AppStorage("toneStyle") var toneStyleRaw = ToneStyle.marks.rawValue
@@ -79,55 +78,37 @@ final class AppSettings: ObservableObject {
     @AppStorage("discSplit") var discSplit = 0.32
     /// Seconds the highlight runs ahead of the reported playback time, for every song.
     @AppStorage("leadTime") var leadTime = 0.3
+    /// Records line-timed songs once and times every character to the singing.
+    @AppStorage("syncWords") var syncWords = true
 
     // Dashboard look
     @AppStorage("appearance") var appearanceRaw = AppearanceMode.system.rawValue
-    @AppStorage("themeStyle") var themeStyleRaw = ThemeStyle.albumArt.rawValue
-    @AppStorage("themePrimary") var themePrimaryHex = "#7FD4FF"
-    @AppStorage("themeSecondary") var themeSecondaryHex = "#B07FFF"
-    /// false = the second color is worked out from the first.
-    @AppStorage("themeUseSecondary") var themeUseSecondary = false
+    @AppStorage("themeID") var themeID = "album"
+    /// Average color of the current album art (used by the Album theme).
+    @Published var artColor: Color?
 
     var appearance: AppearanceMode {
         get { AppearanceMode(rawValue: appearanceRaw) ?? .system }
         set { appearanceRaw = newValue.rawValue }
     }
-    var themeStyle: ThemeStyle {
-        get { ThemeStyle(rawValue: themeStyleRaw) ?? .albumArt }
-        set { themeStyleRaw = newValue.rawValue }
-    }
+    var theme: Theme { Theme.named(themeID) }
+
+    /// Dashboard accent. The Album theme uses the album art's color, lifted so it stays readable.
     var primary: Color {
-        get { Color(hex: themePrimaryHex) }
-        set { themePrimaryHex = newValue.hex; objectWillChange.send() }
+        if theme.followsArt, let art = artColor { return art.vivid(brightness: 0.95) }
+        return Color(hex: theme.primary)
     }
-    /// The chosen second color, or one made from the primary: the hue turned 35° and a bit deeper.
     var secondary: Color {
-        get {
-            if themeUseSecondary { return Color(hex: themeSecondaryHex) }
-            let c = NSColor(primary).usingColorSpace(.sRGB) ?? .systemBlue
-            var h: CGFloat = 0, sat: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-            c.getHue(&h, saturation: &sat, brightness: &b, alpha: &a)
-            return Color(hue: (h + 35 / 360).truncatingRemainder(dividingBy: 1),
-                         saturation: min(1, sat * 1.1), brightness: b * 0.8)
-        }
-        set { themeSecondaryHex = newValue.hex; objectWillChange.send() }
+        if theme.followsArt, let art = artColor { return art.vivid(brightness: 0.6, hueShift: 30) }
+        return Color(hex: theme.secondary)
     }
-
-    func apply(_ p: ThemePreset) {
-        themeStyle = p.style
-        themePrimaryHex = p.primary
-        if let s = p.secondary { themeSecondaryHex = s; themeUseSecondary = true } else { themeUseSecondary = false }
-        objectWillChange.send()
-    }
-
+    /// The color sung words turn (from the theme).
     var highlight: Color {
-        get { Color(hex: highlightHex) }
-        set { highlightHex = newValue.hex; objectWillChange.send() }
+        if theme.followsArt, let art = artColor { return art.vivid(brightness: 1.0, saturation: 0.55) }
+        return Color(hex: theme.highlight)
     }
-    var background: Color {
-        get { Color(hex: backgroundHex) }
-        set { backgroundHex = newValue.hex; objectWillChange.send() }
-    }
+    /// The island's background color (from the theme).
+    var background: Color { Color(hex: theme.island) }
     var toneStyle: ToneStyle {
         get { ToneStyle(rawValue: toneStyleRaw) ?? .marks }
         set { toneStyleRaw = newValue.rawValue }
@@ -155,6 +136,16 @@ extension Color {
                       Int(round(c.redComponent * 255)),
                       Int(round(c.greenComponent * 255)),
                       Int(round(c.blueComponent * 255)))
+    }
+
+    /// Same hue, with brightness/saturation set so it reads well on dark glass.
+    func vivid(brightness: CGFloat, saturation: CGFloat = 0.7, hueShift: CGFloat = 0) -> Color {
+        let c = NSColor(self).usingColorSpace(.sRGB) ?? .systemBlue
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        c.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        // Grey art has no real hue; keep it calm instead of inventing a color.
+        let sat = s < 0.12 ? 0.08 : max(saturation * 0.8, min(saturation, s * 1.3))
+        return Color(hue: (h + hueShift / 360).truncatingRemainder(dividingBy: 1), saturation: sat, brightness: brightness)
     }
 
     /// Blend from this color toward `other` by `t` (0...1).

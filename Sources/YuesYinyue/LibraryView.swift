@@ -30,9 +30,8 @@ struct LibraryView: View {
     @StateObject private var ui = LibraryUI()
 
     var body: some View {
-        NavigationSplitView {
-            sidebar
-        } detail: {
+        HStack(spacing: 0) {
+            Sidebar(model: model, library: library, settings: settings, ui: ui)
             ZStack {
                 if let id = ui.openSong, let s = library.songs.first(where: { $0.id == id }) {
                     SongDetail(model: model, library: library, settings: settings, ui: ui, song: s,
@@ -44,11 +43,23 @@ struct LibraryView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
         }
-        .frame(minWidth: 900, minHeight: 600)
+        .background(LivingBackdrop(image: model.nowPlaying.artwork, settings: settings))
+        .environmentObject(settings)
+        .ignoresSafeArea()
+        .frame(minWidth: 900, minHeight: 620)
         .tint(settings.primary)
         .onChange(of: ui.page) { ui.openSong = nil }
-        .onReceive(NotificationCenter.default.publisher(for: .init("debugPage"))) { _ in ui.page = .nowPlaying }
+        .onReceive(NotificationCenter.default.publisher(for: .init("debugPage"))) { n in
+            switch n.object as? String {
+            case "now": ui.page = .nowPlaying
+            case "custom": ui.page = .customize
+            case "settings": ui.page = .settings
+            case "songs": ui.page = .songs(app: nil)
+            default: break
+            }
+        }
         .onAppear {   // developer check: open a menu or dialog for --snapshot
             let env = ProcessInfo.processInfo.environment
             if let s = library.songs.first {
@@ -120,73 +131,6 @@ struct LibraryView: View {
         }
     }
 
-    private var sidebar: some View {
-        List(selection: $ui.page) {
-            Text("音乐")
-                .font(.system(size: 28, weight: .bold, design: .rounded))
-                .foregroundStyle(LinearGradient(colors: [settings.primary, settings.secondary],
-                                                startPoint: .leading, endPoint: .trailing))
-                .padding(.vertical, 4)
-                .selectionDisabled()
-            Label("Home", systemImage: "house.fill").tag(LibraryUI.Page.home)
-            Label("Now Playing", systemImage: "play.circle.fill").tag(LibraryUI.Page.nowPlaying)
-
-            Section("Library") {
-                Label("All Songs", systemImage: "music.note.list")
-                    .badge(library.songs.count)
-                    .tag(LibraryUI.Page.songs(app: nil))
-                ForEach(apps, id: \.self) { app in
-                    Label(Track.name(forBundle: app), systemImage: AppIcon.symbol(app))
-                        .badge(library.songs.filter { $0.app == app }.count)
-                        .tag(LibraryUI.Page.songs(app: app))
-                }
-            }
-
-            Section("Albums") {
-                ForEach(library.albums) { a in
-                    Label(a.name, systemImage: a.id == LyricsLibrary.likedID ? "heart.fill" : "square.stack.fill")
-                        .badge(a.songIDs.count)
-                        .tag(LibraryUI.Page.album(a.id))
-                }
-                Button { ui.namingAlbum = .init(songID: nil) } label: {
-                    Label("New Album", systemImage: "plus")
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .selectionDisabled()
-            }
-
-            Section("App") {
-                Label("Customization", systemImage: "paintpalette.fill").tag(LibraryUI.Page.customize)
-                Label("Settings", systemImage: "gearshape.fill").tag(LibraryUI.Page.settings)
-            }
-        }
-        .listStyle(.sidebar)
-        .safeAreaInset(edge: .bottom) {
-            VStack(spacing: 6) {
-                SidebarButton(symbol: "arrow.down.to.line.compact", title: "Move island to bottom-center",
-                              on: false, tint: settings.primary) { model.resetIsland() }
-                SidebarButton(symbol: settings.allSpaces ? "square.on.square" : "square",
-                              title: settings.allSpaces ? "Island on every desktop" : "Island on this desktop only",
-                              on: settings.allSpaces, tint: settings.primary) { settings.allSpaces.toggle() }
-                SidebarButton(symbol: settings.alwaysOnTop ? "pin.fill" : "pin.slash",
-                              title: settings.alwaysOnTop ? "Island always on top" : "Island acts like a normal window",
-                              on: settings.alwaysOnTop, tint: settings.primary) { settings.alwaysOnTop.toggle() }
-                IslandSwitch(model: model, settings: settings)
-            }
-            .padding(10)
-        }
-        .navigationSplitViewColumnWidth(min: 210, ideal: 230, max: 280)
-    }
-
-    /// Apps that songs were played from, most songs first.
-    private var apps: [String] {
-        let counts = Dictionary(grouping: library.songs.compactMap(\.app), by: { $0 }).mapValues(\.count)
-        // Fixed order (most songs first, then by name) so rows never swap places on redraw.
-        return counts.keys.sorted {
-            counts[$0]! != counts[$1]! ? counts[$0]! > counts[$1]! : Track.name(forBundle: $0) < Track.name(forBundle: $1)
-        }
-    }
 }
 
 enum AppIcon {
@@ -284,63 +228,6 @@ struct Cover: View {
     }
 }
 
-/// The dashboard background, in the theme's style. The album art style blurs what's playing,
-/// like Apple Music. Everything is drawn in overlays and clipped, so a huge or oddly shaped
-/// image can never push the page's content off screen.
-struct ArtBackdrop: View {
-    var image: NSImage?
-    @ObservedObject var settings: AppSettings
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        let p = settings.primary, s2 = settings.secondary
-        let dark = scheme == .dark
-        Color(nsColor: .windowBackgroundColor)
-            .overlay {
-                switch settings.themeStyle {
-                case .albumArt:
-                    if let image {
-                        Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
-                            .blur(radius: 80).saturation(1.4).opacity(dark ? 0.7 : 0.55)
-                            .transition(.opacity)
-                    } else {
-                        aurora(p, s2, dark ? 0.35 : 0.28)
-                    }
-                case .aurora:
-                    aurora(p, s2, dark ? 0.5 : 0.38)
-                case .gradient:
-                    LinearGradient(colors: [p.opacity(dark ? 0.55 : 0.4), s2.opacity(dark ? 0.45 : 0.3)],
-                                   startPoint: .topLeading, endPoint: .bottomTrailing)
-                case .solid:
-                    p.opacity(dark ? 0.28 : 0.16)
-                case .minimal:
-                    Color.clear
-                }
-            }
-            .overlay(LinearGradient(colors: dark ? [.black.opacity(0.05), .black.opacity(0.4)]
-                                                 : [.white.opacity(0.0), .white.opacity(0.35)],
-                                    startPoint: .top, endPoint: .bottom))
-            .clipped()
-            .ignoresSafeArea()
-            .animation(.easeInOut(duration: 0.6), value: image)
-            .animation(.easeInOut(duration: 0.4), value: settings.themeStyleRaw)
-    }
-
-    private func aurora(_ a: Color, _ b: Color, _ strength: Double) -> some View {
-        GeometryReader { g in
-            ZStack {
-                Circle().fill(a.opacity(strength)).frame(width: g.size.width * 0.8)
-                    .position(x: g.size.width * 0.15, y: g.size.height * 0.1)
-                Circle().fill(b.opacity(strength)).frame(width: g.size.width * 0.7)
-                    .position(x: g.size.width * 0.9, y: g.size.height * 0.45)
-                Circle().fill(a.mix(b, 0.5).opacity(strength * 0.7)).frame(width: g.size.width * 0.6)
-                    .position(x: g.size.width * 0.35, y: g.size.height * 1.0)
-            }
-            .blur(radius: 90)
-        }
-    }
-}
-
 // MARK: Home
 
 struct HomePage: View {
@@ -349,14 +236,15 @@ struct HomePage: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var nowPlaying: NowPlayingMonitor
     @ObservedObject var ui: LibraryUI
+    @Local private var heroWidth: CGFloat = 900
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 34) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(greeting).font(.system(size: 34, weight: .bold, design: .rounded))
-                    Text(Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day()))
-                        .foregroundStyle(.secondary)
+                    Text(Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day()).uppercased())
+                        .font(.system(size: 11, weight: .bold)).tracking(1.4).foregroundStyle(.secondary)
+                    Text(greeting).font(.system(size: 40, weight: .heavy, design: .rounded))
                 }
                 hero
                 stats
@@ -374,7 +262,6 @@ struct HomePage: View {
             }
             .padding(36)
         }
-        .background(ArtBackdrop(image: nowPlaying.artwork, settings: settings))
     }
 
     private var greeting: String {
@@ -382,56 +269,104 @@ struct HomePage: View {
         return h < 5 ? "Late night listening" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening"
     }
 
+    /// Art beside the info when there's room, above it when the window is narrow.
     private var hero: some View {
-        HStack(spacing: 24) {
+        Group {
+            if heroWidth >= 700 {
+                HStack(alignment: .center, spacing: 28) { heroArt; heroInfo.frame(maxWidth: .infinity, alignment: .leading) }
+            } else {
+                VStack(alignment: .leading, spacing: 20) { heroArt; heroInfo }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(26)
+        .background(GeometryReader { g in
+            Color.clear.onAppear { heroWidth = g.size.width }
+                .onChange(of: g.size.width) { _, w in heroWidth = w }
+        })
+        .glassCard(28)
+    }
+
+    private var heroArt: some View {
             Group {
                 if settings.showDisc {
-                    Turntable(nowPlaying: nowPlaying, settings: settings)
+                    Turntable(nowPlaying: nowPlaying, settings: settings).frame(width: 170, height: 221)
                 } else {
-                    Cover(image: nowPlaying.artwork, title: nowPlaying.track?.title ?? "♪", tint: settings.highlight, corner: 14)
-                        .shadow(color: .black.opacity(0.3), radius: 14, y: 8)
+                    Cover(image: nowPlaying.artwork, title: nowPlaying.track?.title ?? "♪", tint: settings.primary, corner: 18)
+                        .frame(width: 210, height: 210)
+                        .shadow(color: .black.opacity(0.4), radius: 24, y: 14)
                 }
             }
-            .frame(width: settings.showDisc ? 130 : 150, height: settings.showDisc ? 169 : 150)
+    }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text(nowPlaying.track == nil ? "NOTHING PLAYING" : "NOW PLAYING")
-                    .font(.system(size: 11, weight: .semibold)).tracking(1.2).foregroundStyle(.secondary)
-                Text(nowPlaying.track.map { TitleCleaner.title($0.title) } ?? "Play a song in any music app")
-                    .font(.system(size: 26, weight: .bold, design: .rounded)).lineLimit(2)
-                if let t = nowPlaying.track {
-                    Text(TitleCleaner.artist(t.artist)).font(.title3).foregroundStyle(.secondary)
-                    Text("from \(t.playerName)").font(.system(size: 12)).foregroundStyle(.tertiary)
+    private var heroInfo: some View {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    EqualizerBars(playing: nowPlaying.isPlaying, tint: settings.primary)
+                    Text(nowPlaying.track.map { "NOW PLAYING · \($0.playerName)" } ?? "NOTHING PLAYING")
+                        .font(.system(size: 11, weight: .bold)).tracking(1.2)
                 }
+                .padding(.horizontal, 10).padding(.vertical, 5)
+                .background(Capsule().fill(settings.primary.opacity(0.18)))
+
+                Text(nowPlaying.track.map { TitleCleaner.title($0.title) } ?? "Play a song in any music app")
+                    .font(.system(size: 32, weight: .heavy, design: .rounded))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.7)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let t = nowPlaying.track {
+                    Text(TitleCleaner.artist(t.artist)).font(.system(size: 17, weight: .medium)).foregroundStyle(.secondary)
+                }
+
+                // The line being sung, live, with its pinyin.
+                if model.song != nil {
+                    LyricsStage(model: model, settings: settings, nowPlaying: nowPlaying, fixedLines: 1)
+                        .frame(height: settings.fontSize * (settings.showPinyin ? 2.05 : 1.35) + 22)
+                        .background(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(settings.background.opacity(0.92)))
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .padding(.vertical, 4)
+                }
+
+                if heroWidth >= 860 {
+                    HStack(spacing: 12) { transport; heroButtons }
+                } else {
+                    VStack(alignment: .leading, spacing: 12) { transport; heroButtons }
+                }
+            }
+    }
+
+    @ViewBuilder private var transport: some View {
+        if nowPlaying.track != nil {
+            HStack(spacing: 12) {
+                        CircleControl("backward.fill", size: 40, tint: settings.primary, filled: false) { nowPlaying.send(.previous) }
+                        CircleControl(nowPlaying.isPlaying ? "pause.fill" : "play.fill", size: 52, tint: settings.primary, filled: true) {
+                            nowPlaying.send(.togglePlayPause)
+                        }
+                        CircleControl("forward.fill", size: 40, tint: settings.primary, filled: false) { nowPlaying.send(.next) }
+            }
+        }
+    }
+
+    private var heroButtons: some View {
                 HStack(spacing: 10) {
                     if nowPlaying.track != nil {
-                        HStack(spacing: 4) {
-                            PlainIcon("backward.fill") { nowPlaying.send(.previous) }
-                            PlainIcon(nowPlaying.isPlaying ? "pause.fill" : "play.fill", size: 22) { nowPlaying.send(.togglePlayPause) }
-                            PlainIcon("forward.fill") { nowPlaying.send(.next) }
-                        }
-                        Button { ui.page = .nowPlaying } label: { Label("Lyrics", systemImage: "quote.bubble.fill") }
+                        Button { ui.page = .nowPlaying } label: { Label("Full lyrics", systemImage: "quote.bubble.fill") }
                             .buttonStyle(GlassButton())
                     }
                     Button { model.islandShown.toggle() } label: {
                         Label(model.islandShown ? "Hide island" : "Show island", systemImage: "pip")
+                            .fixedSize()
                     }
                     .buttonStyle(GlassButton())
                 }
-                .padding(.top, 4)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(22)
-        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.ultraThinMaterial))
-        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(.white.opacity(0.08)))
     }
 
     private var stats: some View {
-        HStack(spacing: 14) {
-            StatTile(value: "\(library.songs.count)", label: "songs saved", symbol: "music.note")
-            StatTile(value: "\(characters)", label: "different characters in your songs", symbol: "character.textbox.zh")
-            StatTile(value: "\(Set(library.songs.compactMap(\.app)).count)", label: "apps you listen in", symbol: "square.grid.2x2.fill")
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 14)], spacing: 14) {
+            StatTile(value: "\(library.songs.count)", label: "songs", symbol: "music.note")
+            StatTile(value: "\(characters)", label: "characters", symbol: "character.textbox.zh")
+            StatTile(value: "\(Set(library.songs.compactMap(\.app)).count)", label: "apps", symbol: "square.grid.2x2.fill")
             StatTile(value: "\(library.songs.reduce(0) { $0 + $1.lines.filter { $0.pinyinOverride != nil }.count })",
                      label: "pinyin fixes", symbol: "pencil")
         }
@@ -485,15 +420,69 @@ struct StatTile: View {
     var value: String
     var label: String
     var symbol: String
+    @EnvironmentObject var settings: AppSettings
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Image(systemName: symbol).foregroundStyle(.secondary)
-            Text(value).font(.system(size: 26, weight: .bold, design: .rounded).monospacedDigit())
-            Text(label).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(2)
+        HStack(spacing: 12) {
+            Image(systemName: symbol)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(settings.primary)
+                .frame(width: 36, height: 36)
+                .background(Circle().fill(settings.primary.opacity(0.16)))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(value).font(.system(size: 22, weight: .heavy, design: .rounded).monospacedDigit())
+                Text(label).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(2)
+            }
+            Spacer(minLength: 0)
         }
-        .padding(16)
+        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.ultraThinMaterial))
+        .glassCard(18)
+    }
+}
+
+/// Three little bars that bounce while music plays.
+struct EqualizerBars: View {
+    var playing: Bool
+    var tint: Color
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1 / 20, paused: !playing)) { ctx in
+            let t = ctx.date.timeIntervalSinceReferenceDate
+            HStack(alignment: .bottom, spacing: 2) {
+                ForEach(0..<3) { i in
+                    Capsule().fill(tint)
+                        .frame(width: 3, height: playing ? 4 + 8 * abs(sin(t * (5 + Double(i) * 1.7) + Double(i))) : 4)
+                }
+            }
+            .frame(height: 12, alignment: .bottom)
+        }
+    }
+}
+
+/// Round playback button; `filled` is the big main one.
+struct CircleControl: View {
+    let symbol: String
+    let size: CGFloat
+    let tint: Color
+    let filled: Bool
+    let action: () -> Void
+    @Local private var over = false
+    init(_ symbol: String, size: CGFloat, tint: Color, filled: Bool, action: @escaping () -> Void) {
+        self.symbol = symbol; self.size = size; self.tint = tint; self.filled = filled; self.action = action
+    }
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: size * 0.36, weight: .bold))
+                .foregroundStyle(filled ? Color.white : Color.primary)
+                .frame(width: size, height: size)
+                .background(Circle().fill(filled ? AnyShapeStyle(tint) : AnyShapeStyle(.ultraThinMaterial)))
+                .overlay(Circle().strokeBorder(.white.opacity(filled ? 0 : 0.12)))
+                .shadow(color: .black.opacity(filled ? 0.25 : 0), radius: 8, y: 4)
+                .scaleEffect(over ? 1.07 : 1)
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(.plain)
+        .onHover { h in withAnimation(.spring(response: 0.25, dampingFraction: 0.6)) { over = h } }
     }
 }
 
@@ -648,7 +637,6 @@ struct AlbumPage: View {
             }
             .padding(36)
         }
-        .background(ArtBackdrop(image: songs.first.flatMap { library.artwork(for: $0.id) }, settings: settings))
     }
 }
 
@@ -843,7 +831,6 @@ struct NowPlayingPage: View {
             .frame(width: g.size.width, height: g.size.height, alignment: .top)
             .clipped()
         }
-        .background(ArtBackdrop(image: nowPlaying.artwork, settings: settings))
         .sheet(isPresented: $pasting) {
             PasteSheet(model: model, title: nowPlaying.track?.title ?? "", artist: nowPlaying.track?.artist ?? "")
         }
@@ -872,7 +859,10 @@ struct NowPlayingPage: View {
                     Text(TitleCleaner.artist(t.artist)).font(.title3).foregroundStyle(.secondary)
                 }
                 if let s = model.song {
-                    Chip(text: "\(s.source) · \(timingLabel(s.timing))", tint: settings.highlight)
+                    HStack(spacing: 6) {
+                        Chip(text: "\(s.source) · \(timingLabel(s.timing))", tint: settings.highlight)
+                        SyncChip(sync: model.wordSync, songID: s.id, song: s, tint: settings.primary)
+                    }
                 } else if model.status == .searching {
                     Chip(text: "Looking for lyrics…", tint: settings.highlight)
                 }
@@ -897,6 +887,33 @@ struct NowPlayingPage: View {
     }
 }
 
+/// Shows what Sync words is doing for this song.
+struct SyncChip: View {
+    @ObservedObject var sync: WordSync
+    var songID: String
+    var song: SavedSong
+    var tint: Color
+
+    var body: some View {
+        let synced = song.lines.filter { $0.words != nil }.count
+        Group {
+            switch sync.state {
+            case .recording(let id) where id == songID:
+                Label("Listening to sync words", systemImage: "waveform")
+            case .aligning(let id) where id == songID:
+                Label("Syncing words…", systemImage: "wand.and.stars")
+            default:
+                if song.timing == .line, synced > 0 {
+                    Label("\(synced)/\(song.lines.count) lines synced", systemImage: "checkmark.seal.fill")
+                }
+            }
+        }
+        .font(.system(size: 12, weight: .medium))
+        .padding(.horizontal, 10).padding(.vertical, 4)
+        .background(Capsule().fill(tint.opacity(0.18)))
+    }
+}
+
 struct Chip: View {
     var text: String
     var tint: Color
@@ -912,6 +929,8 @@ struct GlassButton: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 13, weight: .medium))
+            .lineLimit(1)
+            .fixedSize()
             .padding(.horizontal, 14).padding(.vertical, 7)
             .background(Capsule().fill(.ultraThinMaterial))
             .overlay(Capsule().strokeBorder(.white.opacity(0.12)))
@@ -1156,7 +1175,6 @@ struct SongDetail: View {
             }
             .padding(32)
         }
-        .background(ArtBackdrop(image: library.artwork(for: song.id), settings: settings))
 
     }
 
@@ -1234,120 +1252,247 @@ struct CustomizationView: View {
     @ObservedObject var settings: AppSettings
 
     var body: some View {
-        Form {
-            Section("Appearance") {
-                Picker("Mode", selection: Binding(get: { settings.appearance }, set: { settings.appearance = $0 })) {
-                    ForEach(AppearanceMode.allCases) { Text($0.label).tag($0) }
-                }
-                .pickerStyle(.segmented)
-            }
-            Section {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 14) {
-                        ForEach(ThemePreset.all) { p in
-                            ThemeSwatch(preset: p, selected: isCurrent(p)) { settings.apply(p) }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 30) {
+                PageTitle(title: "Customization", subtitle: "Pick a look. Every theme is tuned for both the dashboard and the lyrics island.")
+
+                VStack(alignment: .leading, spacing: 14) {
+                    SectionTitle("Theme")
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 190), spacing: 14)],
+                              alignment: .leading, spacing: 14) {
+                        ForEach(Theme.all) { t in
+                            ThemeCard(theme: t, selected: settings.themeID == t.id, artColor: settings.artColor) {
+                                withAnimation(.easeInOut(duration: 0.5)) { settings.themeID = t.id }
+                            }
                         }
                     }
-                    .padding(.vertical, 6)
                 }
-                Picker("Style", selection: Binding(get: { settings.themeStyle }, set: { settings.themeStyle = $0 })) {
-                    ForEach(ThemeStyle.allCases) { Text($0.label).tag($0) }
-                }
-                ColorPicker("Primary color", selection: Binding(get: { settings.primary }, set: { settings.primary = $0 }),
-                            supportsOpacity: false)
-                Toggle("Pick a second color myself", isOn: $settings.themeUseSecondary)
-                if settings.themeUseSecondary {
-                    ColorPicker("Secondary color", selection: Binding(get: { settings.secondary },
-                                                                     set: { settings.secondary = $0 }),
-                                supportsOpacity: false)
-                } else {
-                    HStack {
-                        Text("Secondary color")
-                        Spacer()
-                        Circle().fill(settings.secondary).frame(width: 20, height: 20)
-                        Text("made from the primary").foregroundStyle(.secondary)
+
+                VStack(alignment: .leading, spacing: 14) {
+                    SectionTitle("Appearance")
+                    HStack(spacing: 12) {
+                        ForEach(AppearanceMode.allCases) { m in
+                            AppearanceTile(mode: m, selected: settings.appearance == m, tint: settings.primary) {
+                                settings.appearance = m
+                            }
+                        }
                     }
                 }
-            } header: {
-                Text("Theme")
-            } footer: {
-                Text("The theme colors the dashboard. The island has its own colors below.")
-                    .foregroundStyle(.secondary)
-            }
-            Section("Island colors") {
-                ColorPicker("Sung words turn", selection: Binding(get: { settings.highlight },
-                                                                  set: { settings.highlight = $0 }),
-                            supportsOpacity: false)
-                ColorPicker("Island color", selection: Binding(get: { settings.background },
-                                                               set: { settings.background = $0 }),
-                            supportsOpacity: false)
-                HStack {
-                    Text("Solid")
-                    Slider(value: $settings.glass, in: 0...1)
-                    Text("Glass")
+
+                VStack(alignment: .leading, spacing: 14) {
+                    SectionTitle("Lyrics island")
+                    VStack(spacing: 0) {
+                        SettingRow("Pinyin style") {
+                            ChoicePills(options: ToneStyle.allCases.map { ($0, $0.sample) },
+                                        selection: Binding(get: { settings.toneStyle }, set: { settings.toneStyle = $0 }),
+                                        tint: settings.primary, rounded: true)
+                        }
+                        RowDivider()
+                        SettingRow("Show pinyin") { Toggle("", isOn: $settings.showPinyin).labelsHidden().toggleStyle(.switch) }
+                        RowDivider()
+                        SettingRow("Text size") {
+                            HStack {
+                                Image(systemName: "textformat.size.smaller").foregroundStyle(.secondary)
+                                Slider(value: $settings.fontSize, in: 18...40).frame(width: 220)
+                                Image(systemName: "textformat.size.larger").foregroundStyle(.secondary)
+                            }
+                        }
+                        RowDivider()
+                        SettingRow("See-through") {
+                            HStack {
+                                Text("Solid").font(.caption).foregroundStyle(.secondary)
+                                Slider(value: $settings.glass, in: 0...1).frame(width: 200)
+                                Text("Glass").font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        RowDivider()
+                        SettingRow("Spinning record", detail: "A record with the album art and a needle, next to the lyrics") {
+                            Toggle("", isOn: $settings.showDisc).labelsHidden().toggleStyle(.switch)
+                        }
+                        RowDivider()
+                        SettingRow("Lines with no word timing", detail: "How a line lights up when only its start time is known") {
+                            ChoicePills(options: LineFill.allCases.map { ($0, $0.short) },
+                                        selection: Binding(get: { settings.lineFill }, set: { settings.lineFill = $0 }),
+                                        tint: settings.primary, rounded: false)
+                        }
+                    }
+                    .glassCard(18)
                 }
             }
-            Section("Lyrics") {
-                Picker("Pinyin", selection: Binding(get: { settings.toneStyle }, set: { settings.toneStyle = $0 })) {
-                    ForEach(ToneStyle.allCases) { Text($0.label).tag($0) }
-                }
-                Toggle("Show pinyin", isOn: $settings.showPinyin)
-                HStack {
-                    Text("Size")
-                    Slider(value: $settings.fontSize, in: 16...44)
-                    Text("\(Int(settings.fontSize))").monospacedDigit().frame(width: 28)
-                }
-                Picker("Songs with only line timing", selection: Binding(get: { settings.lineFill },
-                                                                       set: { settings.lineFill = $0 })) {
-                    ForEach(LineFill.allCases) { Text($0.label).tag($0) }
-                }
-            }
-            Section {
-                Toggle("Spinning record", isOn: $settings.showDisc)
-            } footer: {
-                Text("A record with the album art and a needle arm, next to the lyrics and on the Now Playing page. Drag the thin line on the island to make it bigger or smaller.")
-                    .foregroundStyle(.secondary)
-            }
+            .padding(36)
         }
-        .formStyle(.grouped)
-        .padding(.vertical, 8)
     }
 }
 
-extension CustomizationView {
-    func isCurrent(_ p: ThemePreset) -> Bool {
-        settings.themeStyle == p.style && settings.themePrimaryHex == p.primary
-            && (p.secondary == nil ? !settings.themeUseSecondary : settings.themeSecondaryHex == p.secondary)
-    }
-}
-
-/// A preset theme: a small preview card of its colors and style.
-struct ThemeSwatch: View {
-    var preset: ThemePreset
+/// A theme as a little preview: the dashboard's background, a sidebar strip, and a lyric line
+/// lit in the theme's sung color on its island.
+struct ThemeCard: View {
+    var theme: Theme
     var selected: Bool
+    var artColor: Color?
+    var action: () -> Void
+    @Local private var over = false
+
+    var body: some View {
+        let p = theme.followsArt ? (artColor?.vivid(brightness: 0.95) ?? Color(hex: theme.primary)) : Color(hex: theme.primary)
+        let s2 = theme.followsArt ? (artColor?.vivid(brightness: 0.6, hueShift: 30) ?? Color(hex: theme.secondary)) : Color(hex: theme.secondary)
+        let hl = theme.followsArt ? (artColor?.vivid(brightness: 1, saturation: 0.55) ?? Color(hex: theme.highlight)) : Color(hex: theme.highlight)
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 10) {
+                ZStack(alignment: .bottomLeading) {
+                    ZStack {
+                        Color(white: 0.08)
+                        Circle().fill(p.opacity(0.55)).frame(width: 150).blur(radius: 40).offset(x: -60, y: -40)
+                        Circle().fill(s2.opacity(0.5)).frame(width: 140).blur(radius: 40).offset(x: 70, y: 30)
+                    }
+                    HStack(spacing: 0) {
+                        Rectangle().fill(.white.opacity(0.06)).frame(width: 34)
+                        Spacer()
+                    }
+                    VStack(spacing: 2) {
+                        (Text("音乐").foregroundColor(hl) + Text("好听").foregroundColor(.white))
+                            .font(.system(size: 13, weight: .bold))
+                        Text("yīn yuè hǎo tīng").font(.system(size: 8, weight: .medium, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.75))
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 7)
+                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(hex: theme.island).opacity(0.85)))
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+                .frame(height: 86)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(selected ? p : .white.opacity(0.1), lineWidth: selected ? 2.5 : 1))
+                HStack {
+                    Text(theme.name).font(.system(size: 14, weight: .semibold))
+                    if theme.followsArt {
+                        Text("follows the song").font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    Spacer()
+                    if selected {
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(p)
+                            .transition(.scale.combined(with: .opacity))
+                    }
+                }
+            }
+            .padding(10)
+            .glassCard(18)
+            .scaleEffect(over ? 1.02 : 1)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: over)
+        }
+        .buttonStyle(.plain)
+        .onHover { over = $0 }
+    }
+}
+
+struct AppearanceTile: View {
+    var mode: AppearanceMode
+    var selected: Bool
+    var tint: Color
     var action: () -> Void
 
     var body: some View {
-        let p = Color(hex: preset.primary)
-        let s = preset.secondary.map(Color.init(hex:)) ?? p.mix(.black, 0.35)
         Button(action: action) {
-            VStack(spacing: 6) {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(preset.style == .minimal ? AnyShapeStyle(Color(nsColor: .windowBackgroundColor))
-                          : AnyShapeStyle(LinearGradient(colors: [p, s], startPoint: .topLeading, endPoint: .bottomTrailing)))
-                    .overlay(alignment: .bottomLeading) {
-                        if preset.style == .albumArt {
-                            Image(systemName: "photo.fill").foregroundStyle(.white.opacity(0.85)).padding(7)
-                        }
-                    }
-                    .frame(width: 74, height: 50)
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(selected ? Color.accentColor : .white.opacity(0.12), lineWidth: selected ? 2.5 : 1))
-                Text(preset.name).font(.system(size: 11, weight: selected ? .semibold : .regular))
+            VStack(spacing: 8) {
+                Image(systemName: mode == .light ? "sun.max.fill" : mode == .dark ? "moon.fill" : "circle.lefthalf.filled")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(selected ? tint : .secondary)
+                Text(mode.label).font(.system(size: 13, weight: .medium))
             }
+            .frame(width: 120, height: 82)
+            .glassCard(16)
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(selected ? tint : .clear, lineWidth: 2))
         }
         .buttonStyle(.plain)
     }
+}
+
+/// A small row of pills to pick one option. Compact, so it fits next to its label.
+struct ChoicePills<T: Hashable>: View {
+    var options: [(T, String)]
+    @Binding var selection: T
+    var tint: Color
+    var rounded: Bool
+    @Namespace private var pill
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(options, id: \.0) { value, label in
+                let on = value == selection
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { selection = value }
+                } label: {
+                    Text(label)
+                        .font(.system(size: 12, weight: on ? .semibold : .medium, design: rounded ? .rounded : .default))
+                        .foregroundStyle(on ? Color.white : Color.primary.opacity(0.75))
+                        .lineLimit(1)
+                        .padding(.horizontal, 11).padding(.vertical, 6)
+                        .background {
+                            if on {
+                                Capsule().fill(tint).matchedGeometryEffect(id: "pill", in: pill)
+                            }
+                        }
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(3)
+        .background(Capsule().fill(Color.primary.opacity(0.07)))
+    }
+}
+
+struct PageTitle: View {
+    var title: String
+    var subtitle: String?
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.system(size: 34, weight: .heavy, design: .rounded))
+            if let subtitle { Text(subtitle).foregroundStyle(.secondary) }
+        }
+    }
+}
+
+struct SectionTitle: View {
+    var text: String
+    init(_ text: String) { self.text = text }
+    var body: some View {
+        Text(text).font(.system(size: 20, weight: .bold, design: .rounded))
+    }
+}
+
+/// A settings row: title (and detail) on the left, wrapping as needed, and the control on the right
+/// at its natural size, so nothing spills out of the card.
+struct SettingRow<Control: View>: View {
+    var title: String
+    var detail: String?
+    @ViewBuilder var control: Control
+    init(_ title: String, detail: String? = nil, @ViewBuilder control: () -> Control) {
+        self.title = title; self.detail = detail; self.control = control()
+    }
+    var body: some View {
+        HStack(alignment: .center, spacing: 16) {
+            labels.frame(maxWidth: .infinity, alignment: .leading)
+            control.fixedSize()
+        }
+        .padding(.horizontal, 18).padding(.vertical, 13)
+    }
+
+    private var labels: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.system(size: 13, weight: .medium))
+            if let detail {
+                Text(detail).font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
+struct RowDivider: View {
+    var body: some View { Rectangle().fill(.primary.opacity(0.07)).frame(height: 1).padding(.leading, 18) }
 }
 
 // MARK: Settings (how it behaves)
@@ -1367,42 +1512,148 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        Form {
-            Section {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Light up earlier by")
-                        Slider(value: Binding(get: { draftLead ?? settings.leadTime }, set: { draftLead = $0 }),
-                               in: -0.5...0.8, step: 0.05)
-                        Text(String(format: "%+.2f s", draftLead ?? settings.leadTime)).monospacedDigit().frame(width: 62)
-                        Button("Apply") { applyLead() }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(draftLead == nil || draftLead == settings.leadTime)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 30) {
+                PageTitle(title: "Settings")
+
+                VStack(alignment: .leading, spacing: 14) {
+                    SectionTitle("Timing")
+                    VStack(spacing: 0) {
+                        SettingRow("Light up earlier by", detail: "Applies right away, to the song playing now and every song after.") {
+                            HStack(spacing: 10) {
+                                Slider(value: Binding(get: { draftLead ?? settings.leadTime }, set: { draftLead = $0 }),
+                                       in: -0.5...0.8, step: 0.05).frame(width: 180)
+                                Text(String(format: "%+.2f s", draftLead ?? settings.leadTime))
+                                    .font(.system(size: 12, weight: .semibold).monospacedDigit()).frame(width: 56)
+                                Button("Apply") { applyLead() }
+                                    .buttonStyle(.borderedProminent)
+                                    .disabled(draftLead == nil || draftLead == settings.leadTime)
+                            }
+                        }
+                        RowDivider()
+                        SettingRow("Sync words to the singing",
+                                   detail: WordSync.isInstalled
+                                       ? "Records line-timed songs once (only the music app's sound), finds when every character is sung, then deletes the recording."
+                                       : "Needs the sync tools. See the README.") {
+                            Toggle("", isOn: $settings.syncWords).labelsHidden().toggleStyle(.switch)
+                                .disabled(!WordSync.isInstalled)
+                        }
                     }
-                    Text("Applies right away, to the song playing now and every song after.")
-                        .font(.caption).foregroundStyle(.tertiary)
+                    .glassCard(18)
                 }
-            } footer: {
-                Text("If words light up after they're sung, slide right. Too early, slide left. Each song also has its own timing shift on its lyrics page.")
-                    .foregroundStyle(.secondary)
+
+                VStack(alignment: .leading, spacing: 14) {
+                    SectionTitle("Lyrics island")
+                    VStack(spacing: 0) {
+                        SettingRow("Keep it on top of other windows", detail: "Off: it acts like a normal window and goes behind whatever you click.") {
+                            Toggle("", isOn: $settings.alwaysOnTop).labelsHidden().toggleStyle(.switch)
+                        }
+                        RowDivider()
+                        SettingRow("Show it on every desktop", detail: "Off: it stays on the desktop it's on.") {
+                            Toggle("", isOn: $settings.allSpaces).labelsHidden().toggleStyle(.switch)
+                        }
+                        RowDivider()
+                        SettingRow("Position") {
+                            Button("Move to bottom-center") { model.resetIsland() }
+                        }
+                    }
+                    .glassCard(18)
+                }
+
+                VStack(alignment: .leading, spacing: 14) {
+                    SectionTitle("Feedback")
+                    FeedbackForm(model: model, settings: settings)
+                }
             }
-            Section {
-                Toggle("Keep the lyrics island on top of other windows", isOn: $settings.alwaysOnTop)
-            } footer: {
-                Text("Off: the island acts like a normal window and goes behind whatever you click. The pin button on the island switches this too.")
-                    .foregroundStyle(.secondary)
+            .padding(36)
+        }
+    }
+}
+
+/// Lets people send an idea or a bug report: their email (optional, for a reply) and a message.
+struct FeedbackForm: View {
+    @ObservedObject var model: AppModel
+    @ObservedObject var settings: AppSettings
+    @Local private var email = ""
+    @Local private var message = ""
+    @Local private var sending = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Found a bug or have an idea? It goes straight to the developer.")
+                .font(.system(size: 13)).foregroundStyle(.secondary)
+            ThemedField(placeholder: "Your email (optional, only if you want a reply)", text: $email, settings: settings)
+            ZStack(alignment: .topLeading) {
+                if message.isEmpty {
+                    Text("What should be better?").foregroundStyle(.tertiary)
+                        .padding(.horizontal, 14).padding(.vertical, 11)
+                }
+                TextEditor(text: $message)
+                    .font(.system(size: 14))
+                    .scrollContentBackground(.hidden)
+                    .padding(.horizontal, 9).padding(.vertical, 6)
             }
-            Section {
-                Toggle("Show the lyrics island on every desktop", isOn: $settings.allSpaces)
-            } footer: {
-                Text("Off: the island stays on the desktop it's on, and you'll only see it when you switch back there.")
-                    .foregroundStyle(.secondary)
-            }
-            Section {
-                Button("Move the lyrics island back to bottom-center") { model.resetIsland() }
+            .frame(minHeight: 120)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.primary.opacity(0.06)))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(.primary.opacity(0.1)))
+            HStack {
+                if !Feedback.isConfigured {
+                    Text("Sending isn't set up yet.").font(.caption).foregroundStyle(.tertiary)
+                }
+                Spacer()
+                DialogButton(sending ? "Sending…" : "Send feedback", settings: settings, style: .primary,
+                             symbol: "paperplane.fill",
+                             disabled: sending || !Feedback.isConfigured || !canSend, action: send)
+                    .frame(width: 190)
             }
         }
-        .formStyle(.grouped)
-        .padding(.vertical, 8)
+        .padding(18)
+        .glassCard(18)
+    }
+
+    private var canSend: Bool {
+        let e = email.trimmingCharacters(in: .whitespaces)
+        let okEmail = e.isEmpty || e.range(of: #"^[^@\s]+@[^@\s]+\.[^@\s]+$"#, options: .regularExpression) != nil
+        return okEmail && message.trimmingCharacters(in: .whitespacesAndNewlines).count >= 3
+    }
+
+    private func send() {
+        sending = true
+        Task {
+            let ok = await Feedback.send(email: email, message: message)
+            sending = false
+            if ok {
+                message = ""
+                model.notify("Thanks for the feedback", detail: "It was sent.")
+            } else {
+                model.notify("Couldn't send", detail: "Check your internet connection and try again.")
+            }
+        }
+    }
+}
+
+/// Where feedback goes: a form endpoint that forwards messages by email, so no address is
+/// written in the app. Empty until it's set up.
+enum Feedback {
+    static let endpoint = ""
+    static var isConfigured: Bool { !endpoint.isEmpty }
+
+    static func send(email: String, message: String) async -> Bool {
+        guard let url = URL(string: endpoint) else { return false }
+        var r = URLRequest(url: url, timeoutInterval: 15)
+        r.httpMethod = "POST"
+        r.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        r.setValue("application/json", forHTTPHeaderField: "Accept")
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        let body: [String: String] = [
+            "email": email.trimmingCharacters(in: .whitespaces),
+            "message": message,
+            "app_version": version,
+            "macos": ProcessInfo.processInfo.operatingSystemVersionString,
+        ]
+        r.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        guard let (_, resp) = try? await URLSession.shared.data(for: r),
+              let code = (resp as? HTTPURLResponse)?.statusCode else { return false }
+        return (200..<300).contains(code)
     }
 }

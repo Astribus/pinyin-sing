@@ -36,6 +36,19 @@ brew install media-control
 
 This builds the app and installs it to `~/Applications`. The app isn't signed by a registered Apple developer, so the first time, right-click it and choose Open.
 
+## Sync words (optional)
+
+Most lyric files only say when each line starts, so the app has to guess when each word is sung. With Sync words on, the app records a line-timed song once as it plays (only the music app's sound, never the microphone). It then separates the vocals with [Demucs](https://github.com/facebookresearch/demucs) and matches each line's pinyin to the singing with the MMS aligner in [torchaudio](https://pytorch.org/audio). Every character gets the time it's actually sung, pauses included. The times are saved with the song and the recording is deleted. Everything runs on your Mac.
+
+It needs Python 3.12 and about 2.5 GB for the tools and the aligner model (downloaded on first use):
+
+```sh
+python3.12 -m venv ~/Library/Application\ Support/Yues\ Yinyue/sync-env
+~/Library/Application\ Support/Yues\ Yinyue/sync-env/bin/pip install torch torchaudio demucs soundfile
+```
+
+Then turn on Settings → Sync words to the singing. The first time, macOS asks to let the app record the music app's audio.
+
 ## Disclaimer
 
 This is an independent, free, open-source project for personal use. It isn't affiliated with or endorsed by NetEase, 汽水音乐 (Soda Music) or ByteDance, Spotify, YouTube or Google, or Apple. All song lyrics, titles, and album art belong to their owners. The app only displays them on your own computer while you listen, and doesn't host or share them.

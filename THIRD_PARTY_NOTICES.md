@@ -63,3 +63,12 @@ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
 CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.```
+
+## Used by Sync words (installed separately, not included in this repository or the app)
+
+Sync words runs these through a local Python environment the user sets up. None of them is redistributed here.
+
+- [PyTorch](https://github.com/pytorch/pytorch) and [torchaudio](https://github.com/pytorch/audio): BSD-style licenses
+- [Demucs](https://github.com/facebookresearch/demucs) (htdemucs model): MIT License
+- [soundfile](https://github.com/bastibe/python-soundfile): BSD 3-Clause License
+- MMS forced-alignment model (`torchaudio.pipelines.MMS_FA`, by Meta), downloaded by torchaudio on first use: CC BY-NC 4.0. Non-commercial use only, which is one reason this app is free.

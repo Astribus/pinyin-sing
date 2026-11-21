@@ -33,8 +33,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Developer check: YuesYinyue --snapshot <home|now> <out.png>  (draws the dashboard to an image)
         if let i = args.firstIndex(of: "--snapshot"), args.count > i + 2 {
             showLibrary()
+            if let w = ProcessInfo.processInfo.environment["YY_SNAP_W"].flatMap(Double.init) {
+                libraryWindow?.setContentSize(NSSize(width: w, height: ProcessInfo.processInfo.environment["YY_SNAP_H"].flatMap(Double.init) ?? 680))
+            }
             let page = args[i + 1], out = args[i + 2]
-            if page == "now" { NotificationCenter.default.post(name: .init("debugPage"), object: "now") }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                NotificationCenter.default.post(name: .init("debugPage"), object: page)
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
                 guard let v = self?.libraryWindow?.contentView,
                       let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds) else { exit(1) }
@@ -134,8 +139,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             w.titleVisibility = .hidden
             w.toolbarStyle = .unified
             w.isReleasedWhenClosed = false
-            w.contentView = NSHostingView(rootView: LibraryView(model: model, library: model.library,
-                                                               settings: model.settings))
+            let host = NSHostingView(rootView: LibraryView(model: model, library: model.library,
+                                                           settings: model.settings))
+            // The window can't be made smaller than the layout needs, so nothing slides off the edge.
+            host.sizingOptions = [.minSize]
+            w.contentView = host
+            w.contentMinSize = NSSize(width: 900, height: 620)
             w.center()
             w.setFrameAutosaveName("LibraryWindow")
             libraryWindow = w

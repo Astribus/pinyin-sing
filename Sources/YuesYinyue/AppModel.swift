@@ -1,4 +1,5 @@
 import AppKit
+import CoreImage
 import SwiftUI
 
 /// Ties it together: what's playing → find (or load saved) lyrics → show them.
@@ -15,6 +16,10 @@ final class AppModel: ObservableObject {
     let library = LyricsLibrary()
     let settings = AppSettings()
     let listener = Listener()
+    let wordSync = WordSync()
+    private var syncTimer: Timer?
+    private var lastPos: Double = 0
+    private var lastTick = Date()
 
     @Published private(set) var song: SavedSong?
     @Published private(set) var status: Status = .idle
@@ -43,6 +48,20 @@ final class AppModel: ObservableObject {
 
     init() {
         nowPlaying.start()
+        wordSync.onSynced = { [weak self] synced, count in
+            guard let self else { return }
+            // Keep any edits made while it was aligning (pinyin fixes, likes), add the word times.
+            var s = self.library.song(forKey: synced.id) ?? synced
+            for (i, line) in synced.lines.enumerated() where i < s.lines.count && line.words != nil && s.lines[i].words == nil {
+                s.lines[i].words = line.words
+                s.lines[i].start = line.start
+            }
+            self.update(s)
+            self.notify("Words synced", detail: "\(count) lines of \(s.title) now follow the singing")
+        }
+        syncTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.syncTick() }
+        }
         // Songs saved before the app was recorded: 汽水音乐 lyrics mean it came from 汽水音乐.
         for var s in library.songs where s.app == nil && s.source == "汽水音乐" {
             s.app = "com.soda.music"
@@ -55,6 +74,8 @@ final class AppModel: ObservableObject {
         Task { @MainActor in
             for await art in nowPlaying.$artwork.values {
                 if let art, let id = self.song?.id { self.library.saveArtwork(art, for: id) }
+                // The Album theme takes its color from the art.
+                withAnimation(.easeInOut(duration: 0.8)) { self.settings.artColor = art.flatMap(averageColor) }
             }
         }
         // React to song changes.
@@ -68,6 +89,27 @@ final class AppModel: ObservableObject {
     /// Playback time for the lyrics, including the song's own offset.
     func position(at date: Date) -> Double {
         nowPlaying.position(at: date) + (song?.offset ?? 0) + settings.leadTime
+    }
+
+    /// Records line-timed songs so Sync words can time each character. A pause or jump ends
+    /// the current recording (it gets synced) and a new one starts when playback continues.
+    private func syncTick() {
+        let now = Date()
+        let pos = nowPlaying.position(at: now)
+        defer { lastPos = pos; lastTick = now }
+        let lyricPos = pos + (song?.offset ?? 0)
+        if let id = wordSync.recordingSongID {
+            let expected = lastPos + now.timeIntervalSince(lastTick)
+            let lastLyric = lastPos + (song?.offset ?? 0)
+            if id != song?.id || !nowPlaying.isPlaying || abs(pos - expected) > 1.5 {
+                wordSync.stopRecording(at: lastLyric, keep: true)
+            } else {
+                return
+            }
+        }
+        guard settings.syncWords, nowPlaying.isPlaying, let s = song, status == .found,
+              let track = nowPlaying.track, WordSync.needsSync(s), listener.state != .listening else { return }
+        wordSync.startRecording(s, bundleID: track.bundleID, at: lyricPos)
     }
 
     private func trackChanged(_ track: Track?) {
@@ -308,4 +350,16 @@ final class AppModel: ObservableObject {
             status = .notFound
         }
     }
+}
+
+/// Average color of an image (Core Image's area average), for the Album theme.
+func averageColor(_ image: NSImage) -> Color? {
+    guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+    let ci = CIImage(cgImage: cg)
+    guard let f = CIFilter(name: "CIAreaAverage", parameters: [kCIInputImageKey: ci, kCIInputExtentKey: CIVector(cgRect: ci.extent)]),
+          let out = f.outputImage else { return nil }
+    var px = [UInt8](repeating: 0, count: 4)
+    CIContext(options: [.workingColorSpace: NSNull()])
+        .render(out, toBitmap: &px, rowBytes: 4, bounds: CGRect(x: 0, y: 0, width: 1, height: 1), format: .RGBA8, colorSpace: nil)
+    return Color(.sRGB, red: Double(px[0]) / 255, green: Double(px[1]) / 255, blue: Double(px[2]) / 255)
 }

@@ -19,6 +19,14 @@ enum ToneStyle: String, CaseIterable, Identifiable {
         case .none: return "No tones (ni hao)"
         }
     }
+    /// A short example of the style, for compact pickers.
+    var sample: String {
+        switch self {
+        case .marks: return "yīn yuè"
+        case .numbers: return "yin1 yue4"
+        case .none: return "yin yue"
+        }
+    }
 }
 
 /// Automatic pinyin using pinyin-pro (MIT, github.com/zh-lx/pinyin-pro), run in
