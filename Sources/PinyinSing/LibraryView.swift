@@ -133,17 +133,6 @@ struct LibraryView: View {
 
 }
 
-enum AppIcon {
-    static func symbol(_ bundleID: String) -> String {
-        switch bundleID {
-        case "com.soda.music": return "bubbles.and.sparkles.fill"
-        case "com.netease.163music": return "cloud.fill"
-        case "com.spotify.client": return "dot.radiowaves.left.and.right"
-        case "com.google.Chrome", "com.apple.Safari": return "play.rectangle.fill"
-        default: return "app.fill"
-        }
-    }
-}
 
 /// On/off for the floating lyrics island, always at the bottom of the sidebar.
 struct IslandSwitch: View {
@@ -303,7 +292,7 @@ struct HomePage: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
                     EqualizerBars(playing: nowPlaying.isPlaying, tint: settings.primary)
-                    Text(nowPlaying.track.map { "NOW PLAYING · \($0.playerName)" } ?? "NOTHING PLAYING")
+                    Text(nowPlaying.track.map { "NOW PLAYING · \(Platform.name(model.platform ?? Platform.from(bundle: $0.bundleID)))" } ?? "NOTHING PLAYING")
                         .font(.system(size: 11, weight: .bold)).tracking(1.2)
                 }
                 .padding(.horizontal, 10).padding(.vertical, 5)
@@ -366,7 +355,7 @@ struct HomePage: View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 14)], spacing: 14) {
             StatTile(value: "\(library.songs.count)", label: "songs", symbol: "music.note")
             StatTile(value: "\(characters)", label: "characters", symbol: "character.textbox.zh")
-            StatTile(value: "\(Set(library.songs.compactMap(\.app)).count)", label: "apps", symbol: "square.grid.2x2.fill")
+            StatTile(value: "\(Set(library.songs.flatMap(\.platforms)).count)", label: "apps", symbol: "square.grid.2x2.fill")
             StatTile(value: "\(library.songs.reduce(0) { $0 + $1.lines.filter { $0.pinyinOverride != nil }.count })",
                      label: "pinyin fixes", symbol: "pencil")
         }
@@ -571,15 +560,15 @@ struct SongsPage: View {
     @Local private var query = ""
 
     var body: some View {
-        SongGrid(title: app.map { Track.name(forBundle: $0) } ?? "All Songs",
-                 subtitle: app == nil ? nil : "Songs you last played in \(Track.name(forBundle: app!))",
+        SongGrid(title: app.map { Platform.name($0) } ?? "All Songs",
+                 subtitle: app == nil ? nil : "Songs you've played on \(Platform.name(app!))",
                  songs: filtered, query: $query, model: model, library: library, settings: settings, ui: ui,
                  empty: library.songs.isEmpty ? "Songs show up here once their lyrics are found." : "No matches.")
     }
 
     private var filtered: [SavedSong] {
         var list = library.songs
-        if let app { list = list.filter { $0.app == app } }
+        if let app { list = list.filter { $0.isOn(app) } }
         guard !query.isEmpty else { return list }
         let q = query.lowercased()
         return list.filter { $0.title.lowercased().contains(q) || $0.artist.lowercased().contains(q) }
@@ -759,8 +748,9 @@ struct SongCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(song.title).font(.system(size: 13, weight: .semibold)).lineLimit(1)
                     Text(song.artist).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
-                    if let app = song.appName {
-                        Text(app).font(.system(size: 11)).foregroundStyle(.tertiary).lineLimit(1)
+                    if !song.platforms.isEmpty {
+                        Text(song.platforms.map(Platform.name).joined(separator: " · "))
+                            .font(.system(size: 11)).foregroundStyle(.tertiary).lineLimit(1)
                     }
                 }
                 Spacer(minLength: 0)
@@ -849,7 +839,7 @@ struct NowPlayingPage: View {
                 }
             }
             VStack(alignment: .leading, spacing: 6) {
-                Text(nowPlaying.track == nil ? "NOTHING PLAYING" : "NOW PLAYING · \(nowPlaying.track!.playerName)")
+                Text(nowPlaying.track == nil ? "NOTHING PLAYING" : "NOW PLAYING · \(Platform.name(model.platform ?? Platform.from(bundle: nowPlaying.track!.bundleID)))")
                     .font(.system(size: 11, weight: .semibold)).tracking(1.2)
                     .foregroundStyle(.secondary)
                 Text(nowPlaying.track.map { TitleCleaner.title($0.title) } ?? "Play a song in any music app")
@@ -1115,8 +1105,9 @@ struct SongDetail: View {
                         Text(song.artist).font(.title3).foregroundStyle(.secondary)
                         Chip(text: "\(song.source) · \(timingLabel(song.timing)) · \(song.lines.count) lines",
                              tint: settings.highlight)
-                        if let app = song.appName {
-                            Text("from \(app)").font(.system(size: 12)).foregroundStyle(.tertiary)
+                        if !song.platforms.isEmpty {
+                            Text("on " + song.platforms.map(Platform.name).joined(separator: " · "))
+                                .font(.system(size: 12)).foregroundStyle(.tertiary)
                         }
                         HStack {
                             Button { model.play(song) } label: {

@@ -29,6 +29,10 @@ final class AppModel: ObservableObject {
 
     /// Whether the floating lyrics island is showing. The app opens with the dashboard instead.
     @Published var islandShown = false
+    /// The platform the current song is playing on (YouTube and Spotify can both be Chrome).
+    @Published private(set) var platform: String?
+    private var platformLink: String?
+
     /// Message after trying to play a saved song in its app (shown as a toast).
     @Published var playMessage: String?
     /// A song whose app isn't known yet; the dashboard asks which app to open it in.
@@ -62,10 +66,19 @@ final class AppModel: ObservableObject {
         syncTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.syncTick() }
         }
-        // Songs saved before the app was recorded: 汽水音乐 lyrics mean it came from 汽水音乐.
-        for var s in library.songs where s.app == nil && s.source == "汽水音乐" {
-            s.app = "com.soda.music"
-            library.save(s)
+        // Songs saved before platforms: turn the stored app into a platform, start the list of
+        // platforms, and move the single link into the per-platform links.
+        for var s in library.songs {
+            var changed = false
+            if s.app == nil, s.source == "汽水音乐" { s.app = "qishui"; changed = true }
+            if let a = s.app, a.contains(".") { s.app = Platform.migrate(a); changed = true }
+            if s.apps == nil, let a = s.app { s.apps = [a]; changed = true }
+            if let link = s.playLink, let a = s.app {
+                s.links = (s.links ?? [:]).merging([a: link]) { old, _ in old }
+                s.playLink = nil
+                changed = true
+            }
+            if changed { library.save(s) }
         }
         // A 汽水音乐 share link copied while a song has no lyrics gets imported automatically.
         pasteboardTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
@@ -121,6 +134,9 @@ final class AppModel: ObservableObject {
         guard track.key != lastKey else { return }
         lastKey = track.key
         searchTask?.cancel()
+        let (p, link) = Player.identify(track)
+        platform = p
+        platformLink = link
         if ProcessInfo.processInfo.environment["YY_FORCE_NOTFOUND"] != nil {   // developer check for the empty state
             song = nil
             status = .notFound
@@ -179,23 +195,30 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Notes which app the song played in, a link back to it, and the play count.
+    /// Notes the platform it played on (added to its list, so a song played on 汽水音乐 and on
+    /// Spotify shows up under both), a link back to it, and the play count.
     private func played(_ s: SavedSong, on track: Track) -> SavedSong {
         var s = s
-        if s.app != track.bundleID { s.playLink = nil }
-        s.app = track.bundleID
+        let p = platform ?? Platform.from(bundle: track.bundleID)
+        guard p != "browser" else {   // unknown site: count the play, don't file it anywhere
+            s.playCount = (s.playCount ?? 0) + 1
+            s.lastPlayed = Date()
+            return s
+        }
+        s.app = p
+        if !(s.apps ?? []).contains(p) { s.apps = (s.apps ?? []) + [p] }
+        if let link = platformLink { s.links = (s.links ?? [:]).merging([p: link]) { _, new in new } }
         s.playCount = (s.playCount ?? 0) + 1
         s.lastPlayed = Date()
-        if s.playLink == nil, let link = Player.currentLink(for: track) { s.playLink = link }
         return s
     }
 
     /// Opens a saved song in the app it came from, behind the dashboard.
     func play(_ s: SavedSong) {
-        guard let app = s.app else { choosingApp = s; return }
+        guard s.app != nil else { choosingApp = s; return }
         Task {
             switch await Player.play(s) {
-            case .playing: toast("Opening in \(Track.name(forBundle: app))…")
+            case .playing(let name): toast("Opening in \(name)…")
             case .openedApp(let name):
                 toast("\(name) opened behind this window. It can't be told which song to play, so \"\(s.title)\" is copied: press ⌘V in its search.")
             case .unavailable:
@@ -205,11 +228,11 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Remembers which app a song belongs to, then plays it there.
-    func play(_ s: SavedSong, in app: String) {
+    /// Plays a song on a chosen platform and remembers it there.
+    func play(_ s: SavedSong, in platform: String) {
         var s = s
-        if s.app != app { s.playLink = nil }
-        s.app = app
+        s.app = platform
+        if !(s.apps ?? []).contains(platform) { s.apps = (s.apps ?? []) + [platform] }
         update(s)
         play(s)
     }

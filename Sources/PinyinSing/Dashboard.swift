@@ -151,8 +151,8 @@ struct Sidebar: View {
                     header("Library")
                     row(.songs(app: nil), "All Songs", "music.note.list", count: library.songs.count)
                     ForEach(apps, id: \.self) { app in
-                        row(.songs(app: app), Track.name(forBundle: app), AppIcon.symbol(app),
-                            count: library.songs.filter { $0.app == app }.count)
+                        row(.songs(app: app), Platform.name(app), Platform.symbol(app),
+                            count: library.songs.filter { $0.isOn(app) }.count)
                     }
 
                     header("Albums")
@@ -250,9 +250,10 @@ struct Sidebar: View {
 
     /// Apps that songs were played from, most songs first (fixed order so rows never jump).
     private var apps: [String] {
-        let counts = Dictionary(grouping: library.songs.compactMap(\.app), by: { $0 }).mapValues(\.count)
+        // A song played on several platforms counts under each of them.
+        let counts = Dictionary(grouping: library.songs.flatMap(\.platforms), by: { $0 }).mapValues(\.count)
         return counts.keys.sorted {
-            counts[$0]! != counts[$1]! ? counts[$0]! > counts[$1]! : Track.name(forBundle: $0) < Track.name(forBundle: $1)
+            counts[$0]! != counts[$1]! ? counts[$0]! > counts[$1]! : Platform.name($0) < Platform.name($1)
         }
     }
 }

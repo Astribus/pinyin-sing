@@ -182,9 +182,9 @@ struct PopupHost: View {
                                         title: "Open \(s.title) in…",
                                         message: "This song was saved before the app remembered where it was played. Your choice is saved with the song.") {
                 VStack(spacing: 8) {
-                    ForEach(Player.installedApps, id: \.self) { app in
-                        DialogButton(Track.name(forBundle: app), settings: settings, style: .tinted,
-                                     symbol: AppIcon.symbol(app)) {
+                    ForEach(Player.choosablePlatforms, id: \.self) { app in
+                        DialogButton(Platform.name(app), settings: settings, style: .tinted,
+                                     symbol: Platform.symbol(app)) {
                             dismissModal()
                             model.play(s, in: app)
                         }
