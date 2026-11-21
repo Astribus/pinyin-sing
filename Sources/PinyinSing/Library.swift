@@ -10,6 +10,7 @@ final class LyricsLibrary: ObservableObject {
 
     private let folder: URL = {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        // The folder keeps the app's earlier name ("Yues Yinyue") so saved songs carry over.
         let dir = base.appendingPathComponent("Yues Yinyue/Songs", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir

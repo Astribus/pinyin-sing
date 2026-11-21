@@ -3,17 +3,17 @@ import Combine
 import SwiftUI
 
 @main
-struct YuesYinyueApp: App {
+struct PinyinSingApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
 
     var body: some Scene {
-        MenuBarExtra("Yue's 音乐", systemImage: "music.note") {
+        MenuBarExtra("拼音 Sing", systemImage: "music.note") {
             Button("Show / Hide Lyrics Island") { delegate.toggleOverlay() }
                 .keyboardShortcut("l")
             Button("Open Library…") { delegate.showLibrary() }
                 .keyboardShortcut("o")
             Divider()
-            Button("Quit Yue's 音乐") { NSApp.terminate(nil) }
+            Button("Quit 拼音 Sing") { NSApp.terminate(nil) }
                 .keyboardShortcut("q")
         }
     }
@@ -28,9 +28,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var islandWatch: AnyCancellable?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Developer check: YuesYinyue --test "title" "artist" [seconds]
+        // Developer check: PinyinSing --test "title" "artist" [seconds]
         let args = CommandLine.arguments
-        // Developer check: YuesYinyue --snapshot <home|now> <out.png>  (draws the dashboard to an image)
+        // Developer check: PinyinSing --snapshot <home|now> <out.png>  (draws the dashboard to an image)
         if let i = args.firstIndex(of: "--snapshot"), args.count > i + 2 {
             showLibrary()
             if let w = ProcessInfo.processInfo.environment["YY_SNAP_W"].flatMap(Double.init) {
@@ -50,7 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             return
         }
-        // Developer check: YuesYinyue --qishui "<share link or track id>"
+        // Developer check: PinyinSing --qishui "<share link or track id>"
         if let i = args.firstIndex(of: "--qishui"), args.count > i + 1 {
             Task { @MainActor in
                 if let r = try? await Qishui.fetch(link: args[i + 1]) {
@@ -134,7 +134,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1080, height: 720),
                              styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                              backing: .buffered, defer: false)
-            w.title = "Yue's 音乐"
+            w.title = "拼音 Sing"
             w.titlebarAppearsTransparent = true
             w.titleVisibility = .hidden
             w.toolbarStyle = .unified

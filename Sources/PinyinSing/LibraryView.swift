@@ -1610,5 +1610,5 @@ struct FeedbackForm: View {
 enum FeedbackLinks {
     /// The developer's LinkedIn profile.
     static let linkedIn = URL(string: "https://www.linkedin.com/in/yue-chen-0aa274317/")
-    static let githubIssues = URL(string: "https://github.com/Astribus/yues-yinyue/issues/new")!
+    static let githubIssues = URL(string: "https://github.com/Astribus/pinyin-sing/issues/new")!
 }

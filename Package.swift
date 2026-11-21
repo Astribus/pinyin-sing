@@ -2,9 +2,9 @@
 import PackageDescription
 
 let package = Package(
-    name: "YuesYinyue",
+    name: "PinyinSing",
     platforms: [.macOS("14.4")],
     targets: [
-        .executableTarget(name: "YuesYinyue"),
+        .executableTarget(name: "PinyinSing"),
     ]
 )

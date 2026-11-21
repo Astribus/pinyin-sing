@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds "build/Yue's 音乐.app" and copies it to ~/Applications.
+# Builds "build/拼音 Sing.app" and copies it to ~/Applications.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -12,10 +12,10 @@ if [ ! -f "$ADAPTER/lib/media-control/mediaremote-adapter.pl" ]; then
 fi
 
 swift build -c release
-APP="build/Yue's 音乐.app"
+APP="build/拼音 Sing.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/MediaRemote"
-cp .build/release/YuesYinyue "$APP/Contents/MacOS/YuesYinyue"
+cp .build/release/PinyinSing "$APP/Contents/MacOS/PinyinSing"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/Vendor/pinyin-pro.js "$APP/Contents/Resources/"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/"
@@ -26,6 +26,6 @@ cp -R "$ADAPTER/Frameworks/MediaRemoteAdapter.framework" "$APP/Contents/Resource
 codesign --force --deep --sign - "$APP"
 
 mkdir -p "$HOME/Applications"
-rm -rf "$HOME/Applications/Yue's 音乐.app"
+rm -rf "$HOME/Applications/拼音 Sing.app"
 cp -R "$APP" "$HOME/Applications/"
-echo "Installed to ~/Applications/Yue's 音乐.app"
+echo "Installed to ~/Applications/拼音 Sing.app"

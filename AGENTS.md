@@ -4,6 +4,7 @@ Notes for AI coding agents (and people) working on this repo. See README.md for 
 
 ## Setup
 
+- The app is named 拼音 Sing. Its bundle ID (`io.github.astribus.yuesyinyue`) and data folder (`~/Library/Application Support/Yues Yinyue`) keep an earlier name so existing settings and saved songs carry over.
 - macOS 14.4 or later, with the Xcode Command Line Tools. Full Xcode is not needed.
 - `brew install media-control`. The build copies its Now Playing helper into the app.
 - Optional, for Sync words: a Python 3.12 venv at `~/Library/Application Support/Yues Yinyue/sync-env` with `torch torchaudio demucs soundfile` (see README).
@@ -12,24 +13,24 @@ Notes for AI coding agents (and people) working on this repo. See README.md for 
 
 ```sh
 swift build                 # debug build, quick compile check
-./build-app.sh              # release build, bundles and installs ~/Applications/Yue's 音乐.app
+./build-app.sh              # release build, bundles and installs ~/Applications/拼音 Sing.app
 ```
 
-There is no Xcode project. `Package.swift` defines one executable target, `YuesYinyue`, and `build-app.sh` packs it into a `.app` with an ad-hoc signature.
+There is no Xcode project. `Package.swift` defines one executable target, `PinyinSing`, and `build-app.sh` packs it into a `.app` with an ad-hoc signature.
 
 ## Checking changes without the UI
 
 The binary has developer modes that print or render and then exit:
 
 ```sh
-.build/debug/YuesYinyue --test "晴天" "周杰伦" 269          # lyrics search + pinyin for a song
-.build/debug/YuesYinyue --qishui <share link or track id>    # 汽水音乐 share-link import
-.build/debug/YuesYinyue --snapshot home build/snaps/home.png # draw the dashboard to a PNG
+.build/debug/PinyinSing --test "晴天" "周杰伦" 269          # lyrics search + pinyin for a song
+.build/debug/PinyinSing --qishui <share link or track id>    # 汽水音乐 share-link import
+.build/debug/PinyinSing --snapshot home build/snaps/home.png # draw the dashboard to a PNG
 ```
 
 `--snapshot` takes `home`, `now`, `songs`, `custom` or `settings`. Environment variables: `YY_SNAP_W` / `YY_SNAP_H` set the window size, `YY_FORCE_NOTFOUND=1` shows the no-lyrics state, and `YY_DEBUG_POPUP=album|song|new` opens a menu or dialog first. Look at the PNG to check layout changes, especially at the 900 pt minimum width.
 
-## Where things are (`Sources/YuesYinyue`)
+## Where things are (`Sources/PinyinSing`)
 
 - `App.swift`: app entry, menu bar item, windows, developer modes
 - `AppModel.swift`: what's playing → saved or found lyrics → what's shown; Sync words scheduling

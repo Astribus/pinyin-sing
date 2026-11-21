@@ -2,10 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key><string>Yue's 音乐</string>
-    <key>CFBundleDisplayName</key><string>Yue's 音乐</string>
+    <key>CFBundleName</key><string>拼音 Sing</string>
+    <key>CFBundleDisplayName</key><string>拼音 Sing</string>
     <key>CFBundleIdentifier</key><string>io.github.astribus.yuesyinyue</string>
-    <key>CFBundleExecutable</key><string>YuesYinyue</string>
+    <key>CFBundleExecutable</key><string>PinyinSing</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>0.1.0</string>

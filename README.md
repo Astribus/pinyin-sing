@@ -1,4 +1,4 @@
-# Yue's 音乐
+# 拼音 Sing
 
 A floating lyrics window for the Mac that shows Chinese songs with pinyin under every line, so you can sing along even if you can't read the characters. Words light up in your color as they're sung.
 
@@ -25,7 +25,13 @@ When a song starts, the app looks for timed lyrics in this order:
 
 Lyrics are fetched for the song you're playing and saved only on your Mac. This repository contains no lyrics.
 
-## Build
+## Download
+
+Get `拼音.Sing.zip` from the [latest release](https://github.com/Astribus/pinyin-sing/releases/latest), unzip it, and drag 拼音 Sing into Applications.
+
+The app isn't signed by a paid Apple developer account, so the first time you open it, macOS says it can't check it. Click Done, then open System Settings → Privacy & Security, scroll down, and click Open Anyway next to 拼音 Sing. You only have to do this once.
+
+## Build it yourself
 
 Needs macOS 14.4 or later, the Xcode Command Line Tools, and [Homebrew](https://brew.sh).
 
@@ -34,7 +40,7 @@ brew install media-control
 ./build-app.sh
 ```
 
-This builds the app and installs it to `~/Applications`. The app isn't signed by a registered Apple developer, so the first time, right-click it and choose Open.
+This builds the app and installs it to `~/Applications`.
 
 ## Sync words (optional)
 

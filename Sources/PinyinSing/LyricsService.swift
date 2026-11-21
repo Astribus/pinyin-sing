@@ -2,7 +2,7 @@ import Foundation
 
 /// Finds timed lyrics online. Tries NetEase first (best Chinese catalog), then LRCLIB.
 enum LyricsService {
-    static let userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) YuesYinyue/0.1"
+    static let userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) PinyinSing/0.1"
 
     static func find(for track: Track) async -> SavedSong? {
         let artist = TitleCleaner.artist(track.artist)
