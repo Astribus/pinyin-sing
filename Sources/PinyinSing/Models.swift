@@ -15,6 +15,8 @@ struct LyricLine: Codable, Hashable, Identifiable {
     var words: [LyricWord]? = nil
     /// Pinyin the user typed in by hand, one entry per Chinese character.
     var pinyinOverride: [String]? = nil
+    /// English translation of the line (made on the Mac, saved with the song).
+    var translation: String? = nil
 }
 
 enum Timing: String, Codable {

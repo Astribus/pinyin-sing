@@ -48,7 +48,10 @@ struct LyricsStage: View {
 
     private var rowHeight: Double {
         settings.fontSize * (settings.showPinyin ? 2.05 : 1.35) + 16
+            + (settings.showTranslation && hasTranslation ? settings.fontSize * 0.62 : 0)
     }
+
+    private var hasTranslation: Bool { model.song?.lines.contains { $0.translation != nil } ?? false }
 
     /// Scroll wheel / trackpad moves through the lyrics. Scrolling back onto the line being
     /// sung goes back to following the song.
@@ -88,6 +91,7 @@ struct LyricsStage: View {
                         : Karaoke.progress(line: line, tokens: tokens, next: next, t: t,
                                            timing: song.timing, fill: settings.lineFill)
                     LinePair(tokens: tokens, progress: p, settings: settings,
+                             translation: settings.showTranslation ? line.translation : nil,
                              distance: browse == nil ? abs(i - max(scrollCur, 0)) : 0,
                              // Lines hidden in the faded edges don't take clicks.
                              onTap: abs(Double(i) - focus) <= Double(count / 2) ? { jump(to: line) } : nil)
@@ -155,6 +159,7 @@ struct LinePair: View {
     let tokens: [Token]
     let progress: [Double]
     @ObservedObject var settings: AppSettings
+    var translation: String? = nil
     let distance: Int
     /// Click handler. Only the words themselves are clickable, so the empty space
     /// around them still drags the island.
@@ -169,6 +174,12 @@ struct LinePair: View {
             if settings.showPinyin, tokens.contains(where: { $0.pinyin != nil }) {
                 colored(pinyinParts())
                     .font(.system(size: settings.fontSize * 0.56, weight: .medium, design: .rounded))
+            }
+            if let translation {
+                Text(translation)
+                    .font(.system(size: settings.fontSize * 0.5, weight: .regular))
+                    .italic()
+                    .foregroundColor(.white.opacity(0.62))
             }
         }
         .multilineTextAlignment(.center)

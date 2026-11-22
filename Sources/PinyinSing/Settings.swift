@@ -80,6 +80,8 @@ final class AppSettings: ObservableObject {
     @AppStorage("leadTime") var leadTime = 0.3
     /// Records line-timed songs once and times every character to the singing.
     @AppStorage("syncWords") var syncWords = true
+    /// Show an English translation under each line (off until the user turns it on).
+    @AppStorage("showTranslation") var showTranslation = false
 
     // Dashboard look
     @AppStorage("appearance") var appearanceRaw = AppearanceMode.system.rawValue

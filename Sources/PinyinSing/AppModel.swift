@@ -29,6 +29,31 @@ final class AppModel: ObservableObject {
 
     /// Whether the floating lyrics island is showing. The app opens with the dashboard instead.
     @Published var islandShown = false
+    /// Set when translations are on but this Mac doesn't have the language pack yet.
+    @Published var translationNeedsDownload: Locale.Language?
+
+    /// Translates the current song's lines into English (once; saved with the song).
+    func translateCurrent() {
+        guard settings.showTranslation, let s = song, !LyricTranslator.pending(s).isEmpty else { return }
+        Task {
+            switch await LyricTranslator.translate(s) {
+            case .done(let t):
+                translationNeedsDownload = nil
+                // Keep edits made meanwhile; only add the translations.
+                var latest = library.song(forKey: t.id) ?? t
+                guard latest.lines.count == t.lines.count else { return }
+                for i in latest.lines.indices where latest.lines[i].translation == nil {
+                    latest.lines[i].translation = t.lines[i].translation
+                }
+                update(latest)
+            case .needsDownload(let lang):
+                translationNeedsDownload = lang
+            case .unavailable:
+                break
+            }
+        }
+    }
+
     /// The platform the current song is playing on (YouTube and Spotify can both be Chrome).
     @Published private(set) var platform: String?
     private var platformLink: String?
@@ -269,6 +294,7 @@ final class AppModel: ObservableObject {
     }
 
     private func keepArtwork() {
+        translateCurrent()
         if let art = nowPlaying.artwork, let id = song?.id { library.saveArtwork(art, for: id) }
     }
 

@@ -1,4 +1,5 @@
 import SwiftUI
+import Translation
 
 /// Navigation and pop-ups shared by every page of the dashboard.
 @MainActor
@@ -126,7 +127,7 @@ struct LibraryView: View {
                 Text("This album was deleted.").foregroundStyle(.secondary)
             }
         case .customize:
-            CustomizationView(settings: settings)
+            CustomizationView(model: model, settings: settings)
         case .settings:
             SettingsView(model: model, settings: settings)
         }
@@ -311,7 +312,9 @@ struct HomePage: View {
                 // The line being sung, live, with its pinyin.
                 if model.song != nil {
                     LyricsStage(model: model, settings: settings, nowPlaying: nowPlaying, fixedLines: 1)
-                        .frame(height: settings.fontSize * (settings.showPinyin ? 2.05 : 1.35) + 22)
+                        .frame(height: settings.fontSize * (settings.showPinyin ? 2.05 : 1.35) + 22
+                               + (settings.showTranslation && (model.song?.lines.contains { $0.translation != nil } ?? false)
+                                  ? settings.fontSize * 0.62 : 0))
                         .background(RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .fill(settings.background.opacity(0.92)))
                         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -1323,12 +1326,14 @@ struct SongDetail: View {
 // MARK: Customization (how it looks)
 
 struct CustomizationView: View {
+    @ObservedObject var model: AppModel
     @ObservedObject var settings: AppSettings
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 30) {
                 PageTitle(title: "Customization", subtitle: "Pick a look. Every theme is tuned for both the dashboard and the lyrics island.")
+                    .onChange(of: settings.showTranslation) { _, on in if on { model.translateCurrent() } }
 
                 VStack(alignment: .leading, spacing: 14) {
                     SectionTitle("Theme")
@@ -1364,6 +1369,17 @@ struct CustomizationView: View {
                         RowDivider()
                         SettingRow("Show the reading under each line", detail: "Pinyin for Chinese, romaji for Japanese, romanization for Korean") {
                             Toggle("", isOn: $settings.showPinyin).labelsHidden().toggleStyle(.switch)
+                        }
+                        RowDivider()
+                        SettingRow("Show English translation",
+                                   detail: LyricTranslator.isAvailable
+                                       ? "Under the reading, in smaller text. Translated on your Mac, once per song."
+                                       : "Needs macOS 26 or later.") {
+                            Toggle("", isOn: $settings.showTranslation).labelsHidden().toggleStyle(.switch)
+                                .disabled(!LyricTranslator.isAvailable)
+                        }
+                        if #available(macOS 15.0, *), settings.showTranslation, let lang = model.translationNeedsDownload {
+                            TranslationDownloadRow(model: model, language: lang)
                         }
                         RowDivider()
                         SettingRow("Text size") {
@@ -1459,6 +1475,29 @@ struct ThemeCard: View {
         }
         .buttonStyle(.plain)
         .onHover { over = $0 }
+    }
+}
+
+/// Asks macOS to download the translation language pack (it shows its own download prompt),
+/// then translates the song that's playing.
+@available(macOS 15.0, *)
+struct TranslationDownloadRow: View {
+    @ObservedObject var model: AppModel
+    var language: Locale.Language
+    @Local private var config: TranslationSession.Configuration?
+
+    var body: some View {
+        SettingRow("Download \(LyricTranslator.name(language)) → English",
+                   detail: "A one-time download from Apple so translations work on your Mac.") {
+            Button("Download") {
+                config = TranslationSession.Configuration(source: language, target: Locale.Language(identifier: "en"))
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .translationTask(config) { session in
+            try? await session.prepareTranslation()
+            await MainActor.run { model.translateCurrent() }
+        }
     }
 }
 

@@ -50,6 +50,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             return
         }
+        // Developer check: PinyinSing --translate "title" "artist" [seconds]
+        if let i = args.firstIndex(of: "--translate"), args.count > i + 2 {
+            let track = Track(title: args[i + 1], artist: args[i + 2], album: "",
+                              duration: args.count > i + 3 ? Double(args[i + 3]) ?? 0 : 0, bundleID: "test")
+            Task { @MainActor in
+                guard let s = await LyricsService.find(for: track) else { print("no lyrics found"); exit(0) }
+                switch await LyricTranslator.translate(s) {
+                case .done(let t):
+                    for l in t.lines.filter({ $0.translation != nil }).prefix(5) { print(l.text, "→", l.translation!) }
+                case .needsDownload(let lang): print("needs language pack:", LyricTranslator.name(lang))
+                case .unavailable: print("translation unavailable")
+                }
+                exit(0)
+            }
+            return
+        }
         // Developer check: PinyinSing --qishui "<share link or track id>"
         if let i = args.firstIndex(of: "--qishui"), args.count > i + 1 {
             Task { @MainActor in
