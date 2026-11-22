@@ -58,6 +58,8 @@ struct OverlayView: View {
     var openLibrary: () -> Void
     var hide: () -> Void
     @Local private var hovering = false
+    /// The album picker opened from the island's + button.
+    @Local private var pickingAlbum = false
 
     var body: some View {
         ZStack {
@@ -87,6 +89,11 @@ struct OverlayView: View {
             // Controls only show while the pointer is on the island.
             VStack {
                 HStack(spacing: 8) {
+                    // Like and add-to-album for the song that's playing (once it's saved).
+                    if let song = model.song {
+                        IslandSongButtons(library: model.library, settings: settings, song: song,
+                                          shown: hovering || pickingAlbum, picking: $pickingAlbum)
+                    }
                     Spacer()
                     Bubble(shown: hovering, order: 0) {
                         RoundIcon(settings.alwaysOnTop ? "pin.fill" : "pin",
@@ -112,6 +119,24 @@ struct OverlayView: View {
                 PlayerControls(model: model, nowPlaying: model.nowPlaying, settings: settings, shown: hovering)
             }
             .padding(10)
+            // Album picker, right on the island. Click outside it to close.
+            if pickingAlbum, let song = model.song {
+                Color.black.opacity(0.25)
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .onTapGesture { withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { pickingAlbum = false } }
+                    .transition(.opacity)
+                GeometryReader { g in
+                    ScrollView(showsIndicators: false) {
+                        AlbumPicker(library: model.library, settings: settings, song: song) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { pickingAlbum = false }
+                        }
+                    }
+                    .frame(width: 260, height: min(g.size.height - 20, 320))
+                    .fixedSize(horizontal: true, vertical: false)
+                    .padding(10)
+                }
+                .transition(.scale(scale: 0.85, anchor: .topLeading).combined(with: .opacity))
+            }
         }
         .onHover { h in withAnimation(.spring(response: 0.35, dampingFraction: 0.72)) { hovering = h } }
     }
@@ -560,5 +585,32 @@ struct SeekBar: View {
             .font(.system(size: 11, weight: .medium).monospacedDigit())
             .foregroundStyle(onDark ? Color.white.opacity(0.75) : Color.secondary)
             .frame(width: 36)
+    }
+}
+
+/// Heart and + for the island's top-left corner.
+struct IslandSongButtons: View {
+    @ObservedObject var library: LyricsLibrary
+    @ObservedObject var settings: AppSettings
+    var song: SavedSong
+    var shown: Bool
+    @Binding var picking: Bool
+
+    var body: some View {
+        let liked = library.isLiked(song.id)
+        HStack(spacing: 8) {
+            Bubble(shown: shown, order: 0) {
+                RoundIcon(liked ? "heart.fill" : "heart",
+                          help: liked ? "Remove from Liked Songs" : "Add to Liked Songs",
+                          active: liked, tint: Color(hex: "#FF5E8A")) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) { library.toggleLike(song.id) }
+                }
+            }
+            Bubble(shown: shown, order: 1) {
+                RoundIcon("plus", help: "Add to album", active: picking, tint: settings.highlight) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { picking.toggle() }
+                }
+            }
+        }
     }
 }

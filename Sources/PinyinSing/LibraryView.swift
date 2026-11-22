@@ -115,7 +115,7 @@ struct LibraryView: View {
         case .home:
             HomePage(model: model, library: library, settings: settings, nowPlaying: model.nowPlaying, ui: ui)
         case .nowPlaying:
-            NowPlayingPage(model: model, settings: settings, nowPlaying: model.nowPlaying, listener: model.listener)
+            NowPlayingPage(model: model, settings: settings, nowPlaying: model.nowPlaying, listener: model.listener, ui: ui)
         case .songs(let app):
             SongsPage(model: model, library: library, settings: settings, ui: ui, app: app)
         case .album(let id):
@@ -343,6 +343,9 @@ struct HomePage: View {
 
     private var heroButtons: some View {
                 HStack(spacing: 10) {
+                    if let song = model.song {
+                        SongQuickActions(library: library, ui: ui, song: song)
+                    }
                     if nowPlaying.track != nil {
                         Button { ui.page = .nowPlaying } label: { Label("Full lyrics", systemImage: "quote.bubble.fill") }
                             .buttonStyle(GlassButton())
@@ -771,6 +774,37 @@ struct SongCard: View {
     }
 }
 
+/// Heart and "add to album" for the song that's playing, in the dashboard.
+struct SongQuickActions: View {
+    @ObservedObject var library: LyricsLibrary
+    @ObservedObject var ui: LibraryUI
+    var song: SavedSong
+
+    var body: some View {
+        let liked = library.isLiked(song.id)
+        HStack(spacing: 8) {
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) { library.toggleLike(song.id) }
+            } label: {
+                Label(liked ? "Liked" : "Like", systemImage: liked ? "heart.fill" : "heart")
+                    .foregroundStyle(liked ? Color(hex: "#FF5E8A") : Color.primary)
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .buttonStyle(GlassButton())
+            .help(liked ? "Remove from Liked Songs" : "Add to Liked Songs")
+            MenuAnchorButton(ui: ui, kind: .addToAlbum(song)) {
+                Label("Add to Album", systemImage: "plus")
+                    .font(.system(size: 13, weight: .medium))
+                    .lineLimit(1).fixedSize()
+                    .padding(.horizontal, 14).padding(.vertical, 7)
+                    .background(Capsule().fill(.ultraThinMaterial))
+                    .overlay(Capsule().strokeBorder(.white.opacity(0.12)))
+                    .contentShape(Capsule())
+            }
+        }
+    }
+}
+
 struct PlainIcon: View {
     let name: String
     var size: CGFloat = 16
@@ -795,6 +829,7 @@ struct NowPlayingPage: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var nowPlaying: NowPlayingMonitor
     @ObservedObject var listener: Listener
+    @ObservedObject var ui: LibraryUI
     @Local private var pasting = false
 
     var body: some View {
@@ -860,6 +895,8 @@ struct NowPlayingPage: View {
                         Chip(text: "\(s.source) · \(timingLabel(s.timing))", tint: settings.highlight)
                         SyncChip(sync: model.wordSync, songID: s.id, song: s, tint: settings.primary)
                     }
+                    SongQuickActions(library: model.library, ui: ui, song: s)
+                        .padding(.top, 4)
                 } else if model.status == .searching {
                     Chip(text: "Looking for lyrics…", tint: settings.highlight)
                 }
