@@ -124,13 +124,15 @@ final class WordSync: ObservableObject {
     nonisolated private static func align(_ seg: Segment) async -> (SavedSong, Int)? {
         let song = seg.song
         let units: [[Token]] = await MainActor.run {
-            song.lines.map { PinyinEngine.shared.tokens(for: $0, style: .none) }
+            let ja = PinyinEngine.shared.isJapanese(song)
+            return song.lines.map { PinyinEngine.shared.tokens(for: $0, style: .none, japanese: ja) }
         }
         var lines: [Job.Line] = []
         for (i, line) in song.lines.enumerated() where line.words == nil {
             let end = i + 1 < song.lines.count ? song.lines[i + 1].start : line.start + 6
             guard line.start >= seg.start - 0.5, end <= seg.end + 0.5, end > line.start else { continue }
-            let u = units[i].map { ($0.pinyin ?? $0.text) }
+            // The aligner reads plain letters, so drop accents (tēze → teze).
+            let u = units[i].map { ($0.pinyin ?? $0.text).folding(options: .diacriticInsensitive, locale: nil) }
             guard u.contains(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }) else { continue }
             lines.append(.init(index: i, start: line.start, end: end, units: u))
         }

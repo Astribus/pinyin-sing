@@ -81,7 +81,7 @@ struct LyricsStage: View {
             if lo <= hi {
                 ForEach(lo...hi, id: \.self) { i in
                     let line = lines[i]
-                    let tokens = PinyinEngine.shared.tokens(for: line, style: settings.toneStyle)
+                    let tokens = PinyinEngine.shared.tokens(for: line, style: settings.toneStyle, japanese: PinyinEngine.shared.isJapanese(song))
                     let next = i + 1 < lines.count ? lines[i + 1].start : song.duration
                     let p: [Double] = i < cur - 1 ? Array(repeating: 1, count: tokens.count)
                         : i > cur + 1 ? Array(repeating: 0, count: tokens.count)
@@ -121,7 +121,7 @@ struct LyricsStage: View {
                 Text("No timing for these lyrics, so they won't highlight.")
                     .font(.caption).foregroundStyle(.white.opacity(0.6))
                 ForEach(song.lines) { line in
-                    LinePair(tokens: PinyinEngine.shared.tokens(for: line, style: settings.toneStyle),
+                    LinePair(tokens: PinyinEngine.shared.tokens(for: line, style: settings.toneStyle, japanese: PinyinEngine.shared.isJapanese(song)),
                              progress: [], settings: settings, distance: 0)
                 }
             }

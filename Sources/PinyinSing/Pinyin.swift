@@ -53,9 +53,21 @@ final class PinyinEngine {
         context = ctx
     }
 
-    func tokens(_ text: String, style: ToneStyle) -> [Token] {
-        let key = style.rawValue + "\u{1}" + text
+    /// Reading tokens for a line: Korean and Japanese get their romanization, Chinese gets pinyin.
+    /// `japanese` reads kanji-only lines the Japanese way (for songs that have kana elsewhere).
+    func tokens(_ text: String, style: ToneStyle, japanese: Bool = false) -> [Token] {
+        let key = style.rawValue + (japanese ? "j" : "") + "\u{1}" + text
         if let hit = cache[key] { return hit }
+        if Romanize.hasHangul(text) {
+            let t = Romanize.korean(text)
+            cache[key] = t
+            return t
+        }
+        if japanese || Romanize.hasKana(text) {
+            let t = Romanize.japanese(text)
+            cache[key] = t
+            return t
+        }
         var out: [Token] = []
         // pinyin-pro reads simplified characters best (著 → zhe, 車站 → chē zhàn), so look up
         // the pinyin on a simplified copy but keep showing the song's own characters.
@@ -88,8 +100,11 @@ final class PinyinEngine {
     }
 
     /// Tokens for a line, using the user's own pinyin where they fixed it.
-    func tokens(for line: LyricLine, style: ToneStyle) -> [Token] {
-        var t = tokens(line.text, style: style)
+    func tokens(for line: LyricLine, style: ToneStyle, japanese: Bool = false) -> [Token] {
+        // Credit lines added by Chinese lyric sites (作词 : …) stay Chinese even in a Japanese song.
+        let credit = line.text.range(of: #"^\s*(作词|作曲|编曲|制作人|监制|混音|母带|和声|录音|出品|发行|词|曲)\s*[:：]"#,
+                                     options: .regularExpression) != nil
+        var t = tokens(line.text, style: style, japanese: japanese && !credit)
         if let fix = line.pinyinOverride {
             var i = 0
             for k in t.indices where t[k].pinyin != nil {
@@ -98,6 +113,17 @@ final class PinyinEngine {
             }
         }
         return t
+    }
+
+    private var japaneseSongs: [String: Bool] = [:]
+
+    /// True if any line of the song has kana, so its kanji are read as Japanese.
+    func isJapanese(_ song: SavedSong) -> Bool {
+        let key = song.id + "\u{1}\(song.lines.count)"
+        if let hit = japaneseSongs[key] { return hit }
+        let v = song.lines.contains { Romanize.hasKana($0.text) }
+        japaneseSongs[key] = v
+        return v
     }
 
     private static func fallback(_ ch: String) -> String? {

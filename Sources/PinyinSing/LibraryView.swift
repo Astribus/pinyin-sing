@@ -107,6 +107,7 @@ struct LibraryView: View {
         }
         .coordinateSpace(name: dashSpace)
         .overlay { PopupHost(model: model, library: library, settings: settings, ui: ui) }
+        .overlay { ResizeEdges() }
     }
 
     @ViewBuilder
@@ -321,10 +322,20 @@ struct HomePage: View {
                     SeekBar(nowPlaying: nowPlaying, tint: settings.primary, onDark: false)
                         .padding(.vertical, 2)
                 }
-                if heroWidth >= 860 {
-                    HStack(spacing: 12) { transport; heroButtons }
-                } else {
-                    VStack(alignment: .leading, spacing: 12) { transport; heroButtons }
+                // Wraps onto more rows when the card is narrow, so nothing is cut off.
+                FlowLayout(spacing: 10, lineSpacing: 12) {
+                    transport
+                    if let song = model.song {
+                        SongQuickActions(library: library, ui: ui, song: song)
+                    }
+                    if nowPlaying.track != nil {
+                        Button { ui.page = .nowPlaying } label: { Label("Full lyrics", systemImage: "quote.bubble.fill") }
+                            .buttonStyle(GlassButton())
+                    }
+                    Button { model.islandShown.toggle() } label: {
+                        Label(model.islandShown ? "Hide island" : "Show island", systemImage: "pip")
+                    }
+                    .buttonStyle(GlassButton())
                 }
             }
     }
@@ -339,23 +350,6 @@ struct HomePage: View {
                         CircleControl("forward.fill", size: 40, tint: settings.primary, filled: false) { nowPlaying.send(.next) }
             }
         }
-    }
-
-    private var heroButtons: some View {
-                HStack(spacing: 10) {
-                    if let song = model.song {
-                        SongQuickActions(library: library, ui: ui, song: song)
-                    }
-                    if nowPlaying.track != nil {
-                        Button { ui.page = .nowPlaying } label: { Label("Full lyrics", systemImage: "quote.bubble.fill") }
-                            .buttonStyle(GlassButton())
-                    }
-                    Button { model.islandShown.toggle() } label: {
-                        Label(model.islandShown ? "Hide island" : "Show island", systemImage: "pip")
-                            .fixedSize()
-                    }
-                    .buttonStyle(GlassButton())
-                }
     }
 
     private var stats: some View {
@@ -805,6 +799,51 @@ struct SongQuickActions: View {
     }
 }
 
+/// Lays items out left to right and starts a new row when the next one doesn't fit.
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 10
+    var lineSpacing: CGFloat = 10
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let rows = arrange(width: proposal.width ?? .infinity, subviews: subviews)
+        let width = rows.map { $0.width }.max() ?? 0
+        let height = rows.reduce(0) { $0 + $1.height } + lineSpacing * CGFloat(max(0, rows.count - 1))
+        return CGSize(width: min(width, proposal.width ?? width), height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for row in arrange(width: bounds.width, subviews: subviews) {
+            var x = bounds.minX
+            for i in row.items {
+                let size = subviews[i].sizeThatFits(.unspecified)
+                subviews[i].place(at: CGPoint(x: x, y: y + (row.height - size.height) / 2), proposal: .unspecified)
+                x += size.width + spacing
+            }
+            y += row.height + lineSpacing
+        }
+    }
+
+    private struct Row { var items: [Int] = []; var width: CGFloat = 0; var height: CGFloat = 0 }
+
+    private func arrange(width: CGFloat, subviews: Subviews) -> [Row] {
+        var rows: [Row] = [Row()]
+        for i in subviews.indices {
+            let size = subviews[i].sizeThatFits(.unspecified)
+            let needed = rows[rows.count - 1].items.isEmpty ? size.width : rows[rows.count - 1].width + spacing + size.width
+            if needed > width, !rows[rows.count - 1].items.isEmpty {
+                rows.append(Row())
+            }
+            var r = rows[rows.count - 1]
+            r.width = r.items.isEmpty ? size.width : r.width + spacing + size.width
+            r.height = max(r.height, size.height)
+            r.items.append(i)
+            rows[rows.count - 1] = r
+        }
+        return rows
+    }
+}
+
 struct PlainIcon: View {
     let name: String
     var size: CGFloat = 16
@@ -1215,7 +1254,7 @@ struct SongDetail: View {
 
     @ViewBuilder
     private func row(_ line: LyricLine) -> some View {
-        let tokens = PinyinEngine.shared.tokens(for: line, style: settings.toneStyle)
+        let tokens = PinyinEngine.shared.tokens(for: line, style: settings.toneStyle, japanese: PinyinEngine.shared.isJapanese(song))
         let py = tokens.compactMap(\.pinyin)
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
@@ -1317,13 +1356,15 @@ struct CustomizationView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     SectionTitle("Lyrics island")
                     VStack(spacing: 0) {
-                        SettingRow("Pinyin style") {
+                        SettingRow("Pinyin style", detail: "Chinese only. Korean and Japanese always show their English-letter reading.") {
                             ChoicePills(options: ToneStyle.allCases.map { ($0, $0.sample) },
                                         selection: Binding(get: { settings.toneStyle }, set: { settings.toneStyle = $0 }),
                                         tint: settings.primary, rounded: true)
                         }
                         RowDivider()
-                        SettingRow("Show pinyin") { Toggle("", isOn: $settings.showPinyin).labelsHidden().toggleStyle(.switch) }
+                        SettingRow("Show the reading under each line", detail: "Pinyin for Chinese, romaji for Japanese, romanization for Korean") {
+                            Toggle("", isOn: $settings.showPinyin).labelsHidden().toggleStyle(.switch)
+                        }
                         RowDivider()
                         SettingRow("Text size") {
                             HStack {

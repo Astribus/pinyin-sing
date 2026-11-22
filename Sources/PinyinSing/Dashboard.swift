@@ -311,3 +311,70 @@ struct FooterIcon: View {
         .onHover { over = $0 }
     }
 }
+
+/// Wider grab zones for resizing the dashboard window: 10 pt strips on the left, right and
+/// bottom edges and the two bottom corners. The rest of the window is untouched (clicks pass
+/// straight through), and the top edge is left to macOS so the window buttons still work.
+struct ResizeEdges: NSViewRepresentable {
+    func makeNSView(context: Context) -> EdgeView { EdgeView() }
+    func updateNSView(_ nsView: EdgeView, context: Context) {}
+
+    final class EdgeView: NSView {
+        private let band: CGFloat = 10
+        private var edges: (left: Bool, right: Bool, bottom: Bool) = (false, false, false)
+        private var startFrame = NSRect.zero
+        private var startMouse = NSPoint.zero
+
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+        override var isFlipped: Bool { false }
+
+        private func zones(_ p: NSPoint) -> (left: Bool, right: Bool, bottom: Bool) {
+            (p.x <= band, p.x >= bounds.width - band, p.y <= band)
+        }
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            let p = convert(point, from: superview)
+            let z = zones(p)
+            return bounds.contains(p) && (z.left || z.right || z.bottom) ? self : nil
+        }
+
+        override func resetCursorRects() {
+            let w = bounds.width, h = bounds.height
+            addCursorRect(NSRect(x: 0, y: band, width: band, height: h - band), cursor: .resizeLeftRight)
+            addCursorRect(NSRect(x: w - band, y: band, width: band, height: h - band), cursor: .resizeLeftRight)
+            addCursorRect(NSRect(x: band, y: 0, width: w - 2 * band, height: band), cursor: .resizeUpDown)
+            let corner: NSCursor
+            if #available(macOS 15.0, *) { corner = .frameResize(position: .bottomRight, directions: .all) } else { corner = .crosshair }
+            let cornerL: NSCursor
+            if #available(macOS 15.0, *) { cornerL = .frameResize(position: .bottomLeft, directions: .all) } else { cornerL = .crosshair }
+            addCursorRect(NSRect(x: 0, y: 0, width: band, height: band), cursor: cornerL)
+            addCursorRect(NSRect(x: w - band, y: 0, width: band, height: band), cursor: corner)
+        }
+
+        override func mouseDown(with event: NSEvent) {
+            edges = zones(convert(event.locationInWindow, from: nil))
+            startFrame = window?.frame ?? .zero
+            startMouse = NSEvent.mouseLocation
+        }
+
+        override func mouseDragged(with event: NSEvent) {
+            guard let w = window else { return }
+            let now = NSEvent.mouseLocation
+            let dx = now.x - startMouse.x, dy = now.y - startMouse.y
+            let minSize = w.frameRect(forContentRect: NSRect(origin: .zero, size: w.contentMinSize)).size
+            var f = startFrame
+            if edges.right { f.size.width = max(minSize.width, startFrame.width + dx) }
+            if edges.left {
+                let width = max(minSize.width, startFrame.width - dx)
+                f.origin.x = startFrame.maxX - width
+                f.size.width = width
+            }
+            if edges.bottom {
+                let height = max(minSize.height, startFrame.height - dy)
+                f.origin.y = startFrame.maxY - height
+                f.size.height = height
+            }
+            w.setFrame(f, display: true)
+        }
+    }
+}

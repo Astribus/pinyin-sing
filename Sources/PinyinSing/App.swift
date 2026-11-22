@@ -70,7 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if let s = await LyricsService.find(for: track) {
                     print("source=\(s.source) timing=\(s.timing) lines=\(s.lines.count)")
                     for l in s.lines.prefix(6) {
-                        let py = PinyinEngine.shared.tokens(for: l, style: .marks).compactMap(\.pinyin)
+                        let py = PinyinEngine.shared.tokens(for: l, style: .marks, japanese: PinyinEngine.shared.isJapanese(s)).compactMap(\.pinyin)
                         print(String(format: "%7.2f  ", l.start) + l.text + "\n         " + py.joined(separator: " "))
                     }
                 } else {
