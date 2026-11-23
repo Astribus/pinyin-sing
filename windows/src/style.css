@@ -1,0 +1,70 @@
+:root { --hl: #7fd4ff; --bg: rgba(20, 22, 28, 0.78); --font: 26px; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; user-select: none;
+  font-family: "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", "Malgun Gothic", sans-serif; color: #fff; }
+#island { position: absolute; inset: 0; border-radius: 24px; background: var(--bg);
+  border: 1px solid rgba(255,255,255,0.10); backdrop-filter: blur(24px); overflow: hidden; }
+
+/* Lyrics: the line being sung sits in the middle; others fade and blur with distance. */
+#stage { position: absolute; inset: 12px 22px; overflow: hidden;
+  mask-image: linear-gradient(transparent 0, #000 16%, #000 84%, transparent 100%); }
+#lines { position: absolute; left: 0; right: 0; top: 0; transition: transform 0.5s cubic-bezier(.2,.8,.25,1); }
+.line { position: absolute; left: 0; right: 0; text-align: center; cursor: pointer; padding: 4px 12px; border-radius: 12px;
+  transition: opacity .35s, filter .35s, transform .35s, background .15s; text-shadow: 0 1px 2px rgba(0,0,0,.35); }
+.line:hover { background: rgba(255,255,255,0.10); opacity: 1 !important; filter: none !important; }
+.line .zh { font-size: var(--font); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.line .py { font-size: calc(var(--font) * .56); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.line.d1 { opacity: .78; filter: blur(.9px); transform: scale(.96); }
+.line.d2 { opacity: .56; filter: blur(1.8px); transform: scale(.96); }
+.line.d3 { opacity: .35; filter: blur(2.7px); transform: scale(.96); }
+#message { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; pointer-events: none; font-size: 17px; font-weight: 600; }
+#message small { font-weight: 400; opacity: .7; font-size: 12px; }
+
+/* Controls appear only while the pointer is on the island, popping in like bubbles. */
+.controls { position: absolute; display: flex; gap: 8px; z-index: 5; }
+.top-right { top: 10px; right: 10px; }
+.bottom { left: 12px; right: 12px; bottom: 10px; flex-direction: column; align-items: center; gap: 6px; }
+.controls > *, .transport > *, .seek { opacity: 0; transform: scale(.4); filter: blur(4px);
+  transition: opacity .25s, transform .38s cubic-bezier(.3,1.6,.5,1), filter .25s; }
+#island:hover .controls > *, #island:hover .transport > *, #island:hover .seek { opacity: 1; transform: scale(1); filter: none; }
+#island:hover .transport > :nth-child(2) { transition-delay: .035s; }
+#island:hover .transport > :nth-child(3) { transition-delay: .07s; }
+.transport { display: flex; gap: 10px; opacity: 1 !important; transform: none !important; filter: none !important; }
+.icon { width: 36px; height: 36px; border-radius: 50%; border: none; background: rgba(255,255,255,.13); color: #fff;
+  font-size: 15px; cursor: pointer; display: grid; place-items: center; transition: background .15s, transform .15s; }
+.icon:hover { background: rgba(255,255,255,.24); transform: scale(1.08) !important; }
+.icon.big { width: 44px; height: 44px; font-size: 18px; }
+.icon.on { background: var(--hl); color: #111; }
+.seek { display: flex; align-items: center; gap: 10px; width: 100%; font-size: 11px; color: rgba(255,255,255,.75);
+  font-variant-numeric: tabular-nums; }
+.seek span { width: 36px; text-align: center; }
+#bar { position: relative; flex: 1; height: 16px; cursor: pointer; }
+#bar::before { content: ""; position: absolute; left: 0; right: 0; top: 6px; height: 4px; border-radius: 4px; background: rgba(255,255,255,.2); }
+#fill { position: absolute; left: 0; top: 6px; height: 4px; border-radius: 4px; background: var(--hl); }
+#knob { position: absolute; top: 1.5px; width: 13px; height: 13px; margin-left: -6.5px; border-radius: 50%; background: #fff;
+  opacity: 0; transition: opacity .15s; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+#bar:hover #knob { opacity: 1; }
+.pill { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 6; border: 1px solid rgba(255,255,255,.25);
+  background: color-mix(in srgb, var(--hl) 55%, transparent); color: #fff; border-radius: 99px; padding: 6px 12px;
+  font-size: 12px; font-weight: 600; cursor: pointer; }
+.hidden { display: none !important; }
+
+/* Settings, drawn on the island itself. */
+.panel { position: absolute; inset: 10px; z-index: 10; border-radius: 18px; padding: 14px 16px; overflow: auto;
+  background: rgba(16,18,24,.96); border: 1px solid color-mix(in srgb, var(--hl) 35%, transparent);
+  display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.row.col { flex-direction: column; align-items: stretch; }
+#swatches { display: flex; gap: 6px; }
+.swatch { width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
+.swatch.on { border-color: #fff; }
+.pills { display: flex; gap: 2px; background: rgba(255,255,255,.07); border-radius: 99px; padding: 3px; }
+.pills button { border: none; background: transparent; color: rgba(255,255,255,.75); border-radius: 99px; padding: 5px 10px;
+  font-size: 12px; cursor: pointer; }
+.pills button.on { background: var(--hl); color: #111; font-weight: 600; }
+.link { display: flex; gap: 8px; }
+.link input { flex: 1; border-radius: 10px; border: 1px solid rgba(255,255,255,.15); background: rgba(255,255,255,.06);
+  color: #fff; padding: 8px 10px; font-size: 13px; }
+.link button { border: none; border-radius: 99px; background: var(--hl); color: #111; font-weight: 600; padding: 0 14px; cursor: pointer; }
+small { opacity: .7; }

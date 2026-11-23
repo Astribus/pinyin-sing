@@ -42,6 +42,12 @@ brew install media-control
 
 This builds the app and installs it to `~/Applications`.
 
+## Windows (early)
+
+A smaller Windows version lives in [`windows/`](windows): the floating lyrics window with pinyin (and Korean romanization), word-by-word fill, automatic lyric search, 汽水音乐 share links, saved songs and basic settings. It reads what's playing from Windows' media controls, so it works with Spotify, YouTube in a browser, NetEase and most players.
+
+Get the installer from the [Windows releases](https://github.com/Astribus/pinyin-sing/releases) when one is published. Windows may say it protected your PC because the app isn't signed: click More info → Run anyway.
+
 ## Sync words (optional)
 
 Most lyric files only say when each line starts, so the app has to guess when each word is sung. With Sync words on, the app records a line-timed song once as it plays (only the music app's sound, never the microphone). It then separates the vocals with [Demucs](https://github.com/facebookresearch/demucs) and matches each line's pinyin to the singing with the MMS aligner in [torchaudio](https://pytorch.org/audio). Every character gets the time it's actually sung, pauses included. The times are saved with the song and the recording is deleted. Everything runs on your Mac.

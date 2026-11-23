@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>拼音 Sing</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="island" data-tauri-drag-region>
+    <div id="stage"><div id="lines"></div></div>
+    <div id="message"></div>
+    <button id="back-now" class="pill hidden">Back to now</button>
+
+    <div class="controls top-right">
+      <button class="icon" id="pin" title="Keep on top"></button>
+      <button class="icon" id="gear" title="Settings"></button>
+      <button class="icon" id="close" title="Quit"></button>
+    </div>
+
+    <div class="controls bottom">
+      <div class="seek">
+        <span id="t-now">0:00</span>
+        <div id="bar"><div id="fill"></div><div id="knob"></div></div>
+        <span id="t-len">0:00</span>
+      </div>
+      <div class="transport">
+        <button class="icon" id="prev" title="Previous"></button>
+        <button class="icon big" id="play" title="Play / pause"></button>
+        <button class="icon" id="next" title="Next"></button>
+      </div>
+    </div>
+
+    <div id="settings" class="panel hidden">
+      <div class="row"><span>Sung words turn</span><div id="swatches"></div></div>
+      <div class="row"><span>Pinyin style</span><div class="pills" id="tones"></div></div>
+      <div class="row"><span>Show the reading</span><input type="checkbox" id="show-reading"></div>
+      <div class="row"><span>Light up earlier by</span><input type="range" id="lead" min="-0.5" max="0.8" step="0.05"><b id="lead-v"></b></div>
+      <div class="row col"><span>汽水音乐 share link for this song</span>
+        <div class="link"><input id="qs-link" placeholder="Paste the link from Share → Copy Link"><button id="qs-go">Get lyrics</button></div>
+        <small id="qs-msg"></small></div>
+    </div>
+  </div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
