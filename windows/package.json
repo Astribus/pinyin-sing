@@ -1,18 +1,22 @@
 {
   "name": "pinyin-sing-windows",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "test": "node --test src/core/*.test.ts",
-    "build": "node build.mjs"
+    "build": "node build.mjs",
+    "check": "tsc -p ."
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.5",
+    "@tauri-apps/plugin-clipboard-manager": "^2.5.0",
+    "@tauri-apps/plugin-opener": "^2.7.3",
     "pinyin-pro": "3.29.5"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.6",
-    "esbuild": "^0.28.2"
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.3"
   }
 }

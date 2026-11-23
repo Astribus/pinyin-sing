@@ -17,6 +17,8 @@ pub struct NowPlaying {
     pub playing: bool,
     /// The player's app id, e.g. "Spotify.exe" or "Chrome".
     pub app: String,
+    /// Cover art as a data URL (read once per song).
+    pub art: String,
 }
 
 #[cfg(windows)]
@@ -46,9 +48,28 @@ mod imp {
                 updated_ms: filetime_to_unix_ms(tl.LastUpdatedTime()?.UniversalTime),
                 playing,
                 app: s.SourceAppUserModelId()?.to_string(),
+                art: String::new(),
             })
         };
         run().ok().filter(|n| !n.title.is_empty())
+    }
+
+    /// The cover art of what's playing, as image bytes.
+    pub fn thumbnail() -> Option<Vec<u8>> {
+        use windows::Storage::Streams::{DataReader, InputStreamOptions};
+        let run = || -> windows::core::Result<Vec<u8>> {
+            let s = Manager::RequestAsync()?.join()?.GetCurrentSession()?;
+            let props = s.TryGetMediaPropertiesAsync()?.join()?;
+            let stream = props.Thumbnail()?.OpenReadAsync()?.join()?;
+            let size = stream.Size()? as u32;
+            let reader = DataReader::CreateDataReader(&stream.GetInputStreamAt(0)?)?;
+            reader.SetInputStreamOptions(InputStreamOptions::ReadAhead)?;
+            reader.LoadAsync(size)?.join()?;
+            let mut buf = vec![0u8; size as usize];
+            reader.ReadBytes(&mut buf)?;
+            Ok(buf)
+        };
+        run().ok().filter(|b| !b.is_empty())
     }
 
     pub fn control(action: &str, seconds: f64) -> bool {
@@ -71,7 +92,8 @@ mod imp {
 mod imp {
     use super::NowPlaying;
     pub fn read() -> Option<NowPlaying> { None }
+    pub fn thumbnail() -> Option<Vec<u8>> { None }
     pub fn control(_action: &str, _seconds: f64) -> bool { false }
 }
 
-pub use imp::{control, read};
+pub use imp::{control, read, thumbnail};
