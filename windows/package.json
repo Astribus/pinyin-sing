@@ -1,0 +1,12 @@
+{
+  "name": "pinyin-sing-windows",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "node --test src/core/*.test.ts"
+  },
+  "dependencies": {
+    "pinyin-pro": "3.29.5"
+  }
+}
